@@ -2,6 +2,10 @@
 
 **A Gothic highland castle at golden hour that you can fly around, right in your browser.**
 
+### [▶ Fly it now](https://dipengupta.github.io/wrenhollow/)
+
+Needs a browser with WebGPU: current Chrome or Edge on desktop works best.
+
 Dozens of towers and spires on a sheer crag above a dark loch, hundreds of warm lit windows, mist on the water, a covered
 bridge over a ravine, a stone viaduct, a village with chimney smoke and pine forests running up to snowy mountains.
 All of it is made by code: no images, no 3D models, no sound files. The whole world is **one HTML file**.
