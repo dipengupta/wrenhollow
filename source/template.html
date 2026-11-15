@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Wrenhollow</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=theme-color content=#0e0a08>
+<style>
+/* The class on <body> is the state of the page:
+   l = loading, m = menu, g = in the scene (g p while the mouse is captured), l e = failed to start */
+
+/* Cinzel (SIL Open Font License, source/fonts), subset to Latin and inlined by build.mjs */
+@font-face { font-family: Cinzel; src: url(/*FONT*/) format(woff2); font-weight: 400 700; font-display: block; }
+:root {
+  --ink: #0e0a08; --gold: #e9c27a; --pale: #f6e7c8; --dim: #b49a72; --line: #e9c27a59;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+html { background: var(--ink); }
+body {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; overflow: hidden;
+  background: radial-gradient(at 70% 40%, #4a2c1a, var(--ink) 70%);
+  font: 500 clamp(13px, .62vw + .8vh, 34px)/1.5 Cinzel, var(--serif); color: var(--pale);
+  -webkit-user-select: none; user-select: none;
+}
+/* a phone held upright gets the whole page turned on its side, so the scene is always landscape */
+@media (orientation: portrait) and (pointer: coarse) {
+  body { width: 100dvh; height: 100dvw; transform-origin: 0 0; transform: rotate(90deg) translateY(-100%); }
+}
+
+/* the scene: softened and darkened behind the menu, comes into focus when you take flight */
+canvas {
+  position: absolute; width: 100%; height: 100%; touch-action: none; cursor: crosshair;
+  transition: filter 1.4s, transform 1.4s, opacity 2s;
+}
+body:not(.g) canvas { filter: blur(.35vmax) brightness(.72) sepia(.25); transform: scale(1.03); }
+.l canvas { opacity: 0; }
+
+/* menu: a column on the left, the castle stays visible on the right */
+#m {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 1.6em;
+  padding: 2em max(1.5em, 8vw); background: linear-gradient(90deg, #0e0a08f2, #0e0a08b3 32em, #0e0a0800 62%);
+  transition: opacity .6s, visibility .6s;
+}
+.g #m, .m #l, .l #g { opacity: 0; visibility: hidden; }
+#t { margin: 0; font: italic 400 1.15em/1.3 var(--serif); color: var(--dim); letter-spacing: .02em; }
+h1 {
+  margin: -.2em 0 0; font: 400 5.4em/1 Cinzel, var(--serif); letter-spacing: .04em;
+  color: #0000; background: linear-gradient(#fff6e0 20%, var(--gold) 55%, #a86a2c);
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 .04em .12em #000);
+}
+/* a thin gold rule with a lozenge at its left end */
+#r { position: relative; width: 24em; max-width: 100%; height: 1px; margin-top: -1em; background: linear-gradient(90deg, var(--gold), #e9c27a00); }
+#r::before { content: ""; position: absolute; left: 0; top: -.3em; width: .6em; height: .6em; transform: rotate(45deg); translate: -.3em; background: var(--gold); }
+p { margin: 0; }
+#a { display: grid; width: 26em; max-width: 100%; }
+#a > * { grid-area: 1/1; transition: opacity .8s, visibility .8s; }
+#s, #w, #h { font: italic 400 1.05em/1.4 var(--serif); color: var(--dim); }
+#w { margin-top: 1em; color: var(--gold); text-wrap: balance; }
+.e #s { color: var(--pale); }
+
+/* loading: a hairline that fills with a glowing tip */
+#p { position: relative; height: 1px; margin: .2em 0 1em; background: var(--line); }
+#b {
+  position: absolute; inset: -1px 0; background: linear-gradient(90deg, #a86a2c, #fff1cf);
+  box-shadow: 0 0 .8em var(--gold); transform: scaleX(0); transform-origin: 0; will-change: transform;
+}
+.e #p { visibility: hidden; }
+
+/* buttons: engraved frames rather than pills */
+button {
+  padding: 0; border: 0; background: none; color: var(--pale); cursor: pointer;
+  font: 600 1em/1.2 Cinzel, var(--serif); letter-spacing: .14em; transition: color .2s, background .3s, box-shadow .3s;
+}
+:focus-visible { outline: 1px solid var(--pale); outline-offset: 4px; }
+#g { display: grid; justify-items: start; gap: 1.8em; }
+#d {
+  position: relative; padding: .85em 2.6em; font-size: 1.25em; color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold), inset 0 0 0 4px #0e0a08, inset 0 0 0 5px var(--line);
+  background: linear-gradient(#e9c27a12, #e9c27a00);
+}
+#d:hover { color: var(--ink); background: linear-gradient(#fff1cf, var(--gold)); box-shadow: inset 0 0 0 1px var(--gold), 0 0 2.2em #e9a54a80; }
+#d:active { background: linear-gradient(var(--gold), #c98a3e); }
+
+/* detail level: three words, the current one underlined */
+#q { display: flex; align-items: baseline; gap: 1.1em; font-size: .85em; }
+#q span { font: italic 400 1.2em var(--serif); color: var(--dim); margin-right: .2em; }
+#q button { padding: .2em 0; color: var(--dim); font-weight: 500; }
+#q button:hover { color: var(--pale); }
+#q .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
+
+/* list of controls: key caps as small outlined tiles */
+#k { display: flex; gap: 2.4em; font-size: .78em; letter-spacing: .08em; color: var(--dim); }
+#k p { display: grid; grid-template-columns: auto auto; align-content: start; align-items: center; gap: .6em .9em; }
+#k p + p { padding-left: 2.4em; border-left: 1px solid var(--line); }
+#k i { display: flex; align-items: center; gap: .25em; font-style: normal; }
+#k b {
+  min-width: 1.2em; padding: .15em .45em; border: 1px solid var(--line); background: #e9c27a0f;
+  color: var(--pale); font-weight: 600; text-align: center;
+}
+#h { display: none; }
+@media (pointer: coarse), (max-height: 30em) {
+  #k { display: none; }
+}
+@media (pointer: coarse) {
+  #h { display: block; }
+}
+@media (max-width: 40em) {
+  h1 { font-size: 3.6em; }
+  #m { background: #0e0a08c0; }
+}
+
+/* in the scene: a small menu button (hidden while the mouse is captured, Esc does the same) and the stats line */
+#o {
+  position: absolute; top: .7em; right: .7em; display: none; width: 2em; height: 2em; font-size: 1.2em;
+  background: #0e0a08b3; box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); opacity: .85;
+}
+#o:hover { opacity: 1; background: #0e0a08e6; }
+.g #o { display: block; }
+.p #o { display: none; }
+#i {
+  position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none;
+}
+</style>
+</head>
+<body class=l>
+<canvas id=c></canvas>
+<div id=m>
+  <p id=t>A highland castle at dusk</p>
+  <h1>Wrenhollow</h1>
+  <i id=r></i>
+  <div id=a>
+    <div id=l><div id=p><i id=b></i></div><p id=s>Raising the castle…</p><p id=w hidden>Best experienced in Google Chrome</p></div>
+    <div id=g>
+      <button id=d>Take flight</button>
+      <p id=q><span>Detail</span><button>Low</button><button>Medium</button><button>High</button></p>
+      <div id=k>
+        <p>
+          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Fly
+          <i><b>Q</b><b>E</b></i>Down · up
+          <i><b>Shift</b></i>Faster
+          <i><b>1</b>–<b>6</b></i>Viewpoints
+        </p>
+        <p>
+          <i><b>Esc</b></i>Menu
+          <i><b>M</b></i>Mute
+          <i><b>H</b></i>Stats
+        </p>
+      </div>
+      <p id=h>Hold to fly forward · slide to steer · a second finger to go faster</p>
+    </div>
+  </div>
+</div>
+<button id=o aria-label=Menu>≡</button>
+<pre id=i></pre>
+<script>
+/*SCRIPT*/
+</script>
+</body>
+</html>

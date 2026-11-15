@@ -1,0 +1,36 @@
+Build a real-time fantasy highland castle scene that runs in the browser. It only needs to look beautiful and let me fly a free camera through and around it.
+
+PRIORITIES (in this order when they conflict)
+1. Visual quality
+2. Stable frame pacing at the target spec
+3. Small bundle size
+
+CONSTRAINTS
+- No Three.js/Babylon.js or other engines.
+- WebGPU rendered.
+- Everything procedural: no texture/model files. Deliverable is a single self-contained index.html. Report minified size.
+- Zero per-frame JS allocations (no GC stutter). Preallocate all buffers.
+- Original design: no names, crests, characters or layouts from existing franchises.
+
+TARGET
+- macOS, current Chrome, MacBook Pro M1 Pro (16-core GPU), 120 Hz ProMotion display
+- 1728×1117 internal resolution minimum (dynamic resolution upward to native). GPU frame time ≤ 14 ms average, no frame > 16.7 ms during a scripted 60 s fly-through.
+
+SCENE
+- A vast Gothic school-castle on a sheer crag above a dark loch: dozens of towers at many heights, steep conical spires, slate roofs, buttressed halls, courtyards, a tall observatory tower
+- Golden-hour dusk: low warm sun, long shadows, hundreds of warm glowing windows, physically based sky and aerial perspective
+- Mist over the water and in the valleys, drifting clouds lit gold and pink, sun shafts through towers
+- The loch: planar reflections of the castle, ripples, shoreline foam, a waterfall off the cliff, a boathouse with cliff stairs
+- A covered wooden bridge over a ravine, a multi-arch stone viaduct, a village with chimney smoke
+- Highlands: pine forests, heather and grass, rocks, distant snow-capped mountains
+- Animated life: flocks of birds, rippling banners, smoke, fireflies by the shore, bobbing boats
+- World: bounded, but the boundaries can't be visible from anywhere in the playable area
+
+CONTROLS
+WASD move, mouse look (pointer lock), Q/E down/up, Shift to accelerate
+
+VERIFICATION
+- Visual critic: a separate subagent that sees ONLY your renders, never your code or reasoning. Give it 6 fixed camera poses, rendered at 3456×2234 in GPU-accelerated Chrome, plus a short recording of the fly-through to catch shimmer, aliasing, popping and banding. It returns prioritized, concrete defects. Iterate until it reports nothing above "minor".
+- Performance: GPU timestamp queries plus a frame-time log from the scripted fly-through. Report average, 99th percentile and max.
+
+DONE WHEN: both verification gates pass. Deliver index.html, the bundle size, the perf report and the critic's final review.

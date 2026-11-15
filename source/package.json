@@ -1,0 +1,16 @@
+{
+  "name": "wrenhollow",
+  "private": true,
+  "description": "A procedural highland castle at dusk, rendered with WebGPU, bundled into one HTML file",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:readable": "node build.mjs --readable",
+    "build:dev": "node build.mjs --dev",
+    "shots": "node build.mjs --dev && node shots.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "puppeteer-core": "^24.10.0"
+  }
+}
