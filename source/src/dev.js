@@ -50,5 +50,9 @@
     // points on the scripted path that collide() would move: the flight passes through something there
     checkFly: () => { const bad = []; for (let t = 0; t <= FLYT; t += 0.25) { F[FLT] = t; flyAt(); const x = F[CX], y = F[CY], z = F[CZ]; collide(); const m = hypot(F[CX] - x, F[CY] - y, F[CZ] - z); if (m > 0.3) bad.push([t, x | 0, y | 0, z | 0, +m.toFixed(1)]); } return bad; },
     where: () => [F[CX], F[CY], F[CZ], F[YAW], F[PIT]],
+    h: (x, z) => H(x, z),
+    time: (i) => applyTime(i),
+    // a grid of terrain heights, rows along z: dev.grid(x0, x1, z0, z1, step)
+    grid: (x0, x1, z0, z1, s) => { const r = []; for (let z = z0; z <= z1; z += s) { const row = []; for (let x = x0; x <= x1; x += s) row.push(H(x, z) | 0); r.push(z + ': ' + row.join(' ')); } return r.join('\n'); },
   };
 }

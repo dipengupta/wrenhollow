@@ -1,6 +1,6 @@
 # Wrenhollow
 
-**A Gothic highland castle at golden hour that you can fly around, right in your browser.**
+**A Gothic highland castle that you can fly around, right in your browser, from dawn to moonlit night.**
 
 ### [▶ Fly it now](https://dipengupta.github.io/wrenhollow/)
 
@@ -39,21 +39,30 @@ It needs a browser with **WebGPU**.
 | Jump to a viewpoint | `1` to `6` |
 | Menu | `Esc` |
 | Sound on / off | `M` |
+| Time of day | `T`, or **Time** in the menu |
 | Performance stats | `H` |
 | Detail level | **Low**, **Medium** or **High** in the menu (reloads the page) |
+
+### Times of day
+
+**Dawn**, **Morning**, **Afternoon**, **Golden hour**, **Dusk** and **Night** (moonlit). The choice is kept in the
+address, so a look can be shared: [`?time=night`](https://dipengupta.github.io/wrenhollow/?time=night),
+[`?time=dawn`](https://dipengupta.github.io/wrenhollow/?time=dawn),
+[`?time=dusk`](https://dipengupta.github.io/wrenhollow/?time=dusk).
 
 The ground, the walls and the towers are solid. You can fly through the covered bridge and under its arches.
 
 ## What's there
 
-- **The castle**: about fifty towers with steep slate and copper spires, buttressed halls with tall lancet windows,
-  a great hall over the water, a clock tower, an observatory tower, courtyards, curtain walls with crenellations,
+- **The castle**: about fifty towers, most of them octagonal with pinnacled parapets and needle spires, buttressed
+  halls with traceried lancet windows, a great hall with rose windows and flying buttresses, a chapel, a clock tower, an observatory tower, courtyards, curtain walls with crenellations,
   buildings stepping down the crag, banners on the flat-topped towers
 - **The loch**: planar reflections, ripples, a glittering sun path, shoreline foam, a waterfall, a boathouse with a
   cliff stair, rowing boats
-- **The land**: a covered timber bridge over a ravine, a multi-arch viaduct, a village with smoking chimneys and a
+- **The land**: a covered timber bridge over a rocky gorge, a multi-arch viaduct, a village with smoking chimneys and a
   church, about 90,000 pines and birches, heather, bracken, rock faces, snow-capped mountains
-- **The sky**: a physically based sunset sky, drifting clouds lit gold and pink, sun shafts, valley mist
+- **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
+  night stars, a band of the galaxy and the moon with its path on the loch
 - **Life**: rooks circling the towers, chimney smoke, glowing motes along the shore
 - **Sound**: wind that rises with height and speed, lapping water, a distant bell, rooks
 
@@ -88,6 +97,7 @@ node shots.mjs bench   # runs the 60 s benchmark flight and prints frame and GPU
 | [`source/src/world.js`](source/src/world.js) | Trees and birds |
 | [`source/src/audio.js`](source/src/audio.js) | The soundscape |
 | [`source/src/quality.js`](source/src/quality.js) | Detail levels |
+| [`source/src/env.js`](source/src/env.js) | Times of day: light direction, colours, exposure, window glow |
 | [`source/src/math.js`](source/src/math.js) | Noise, random numbers, the terrain grid and the mesh builder |
 | [`source/template.html`](source/template.html) | The page: loading bar, menu and styles |
 | [`source/fonts/`](source/fonts) | The menu typeface (Cinzel, subset to Latin), inlined into the page at build time |

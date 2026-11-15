@@ -2,7 +2,8 @@
 // the castle: a kit of procedural Gothic pieces and the layout that places them (load time)
 // ============================================================================
 // Materials (vertex w): 0 ashlar, 1 slate, 2 lit window, 3 timber, 4 copper, 5 dressed trim, 6 lead/iron,
-// 7 plaster, 8 greenhouse glass, 9 clock face, 10 dark window, 11 thatch, 12 paving
+// 7 plaster, 8 greenhouse glass, 9 clock face, 10 dark window, 11 thatch, 12 paving, 13 rubble, 14 rose window,
+// 15 traceried window
 // Colliders: towers are vertical cylinders, everything else oriented boxes. The camera is kept out of both.
 const COLC = [], COLB = []; // [x, z, r, ytop] ; [cx, cz, ex, ez, half len, half wid, y0, y1]
 const OBJS = []; // [first index, index count, minx, miny, minz, maxx, maxy, maxz] per culling object
@@ -63,9 +64,9 @@ function buildCastle() {
     if (top >= 0) m.quad([c[0][0], y1, c[0][1]], [c[3][0], y1, c[3][1]], [c[2][0], y1, c[2][1]], [c[1][0], y1, c[1][1]], top, 0, 0, 0, 2 * hw, 2 * hl, 2 * hw, 2 * hl, 0);
   };
   // window panel on a wall: centre, outward normal, width, height (uv 0-1 for the arch shader)
-  const win = (x, y, z, nx, nz, w, h, lit = rnd() < 0.9) => {
+  const win = (x, y, z, nx, nz, w, h, lit = rnd() < 0.9, mat = lit ? 2 : 10) => {
     const tx = -nz, tz = nx, o = 0.07, cx = x + nx * o, cz = z + nz * o;
-    m.quad([cx - tx * w / 2, y, cz - tz * w / 2], [cx + tx * w / 2, y, cz + tz * w / 2], [cx + tx * w / 2, y + h, cz + tz * w / 2], [cx - tx * w / 2, y + h, cz - tz * w / 2], lit ? 2 : 10, 0, 0, 1, 0, 1, 1, 0, 1);
+    m.quad([cx - tx * w / 2, y, cz - tz * w / 2], [cx + tx * w / 2, y, cz + tz * w / 2], [cx + tx * w / 2, y + h, cz + tz * w / 2], [cx - tx * w / 2, y + h, cz - tz * w / 2], mat, 0, 0, 1, 0, 1, 1, 0, 1);
     // flip if it faces the wrong way (quad winding follows the tangent)
     const k = m.nv - 4, b = k * 24 + 12;
     if (m.b[b] * nx + m.b[b + 2] * nz < 0) for (let j = 0; j < 4; j++) { m.b[(k + j) * 24 + 12] *= -1; m.b[(k + j) * 24 + 14] *= -1; }
@@ -78,7 +79,7 @@ function buildCastle() {
   // ---- tower: round (n >= 8) or square (n = 4)
   const tower = (x, z, y0, r, h, o = {}) => {
     begin();
-    const n = o.n || (r > 6 ? 20 : r > 4 ? 16 : 12), rot = n === 4 ? PI / 4 : rnd() * TAU, rr0 = n === 4 ? r * Math.SQRT2 : r;
+    const n = o.n || (o.round ? (r > 6 ? 20 : 16) : r >= 3.8 ? 8 : 10), rot = n === 4 ? PI / 4 : rnd() * TAU, rr0 = n === 4 ? r * Math.SQRT2 : r;
     const g = o.base ?? groundMin(x, z, r), top = y0 + h;
     prism(x, z, rr0 * 1.12, rr0 * 1.04, max(g, -2), y0, n, 13, rot); prism(x, z, rr0 * 1.04, rr0, y0, y0 + 2, n, 0, rot);
     prism(x, z, rr0, rr0, y0 + 2, top, n, 0, rot);
@@ -113,17 +114,21 @@ function buildCastle() {
         COLC.push([tx, tz, tr + 0.4, top + 7]);
       }
     } else {
-      const rh = (o.rh || rr(2.8, 3.6)) * R, mat = o.cu ? 4 : 1;
-      if (roof === 'pyr') spire(x, z, R + 0.35, top + 1, rh, 4, mat, rot);
-      else spire(x, z, R + 0.4, top + 1, rh, n, mat, rot);
-      // little dormers on big spires
-      if (r > 5 && roof !== 'pyr') for (let i = 0; i < 4; i++) {
-        const a = rot + i * PI / 2 + 0.3, d = R * 0.78, dx = x + cos(a) * d, dz = z + sin(a) * d, y = top + 1 + rh * 0.12;
+      // Gothic towers: a parapet with a pinnacle on every corner, and the spire set back inside it, tall and narrow
+      const goth = n === 8 && roof !== 'pyr', rs = goth ? R * 0.84 : R + 0.4, mat = o.cu ? 4 : 1;
+      const rh = (o.rh || rr(2.8, 3.6)) * R * (goth ? 1.3 : 1), y1 = top + 1;
+      if (goth) { prism(x, z, R, R, y1, y1 + 1.7, n, 5, rot); disk(x, z, R, y1 + 0.25, n, 12, rot); }
+      if (roof === 'pyr') spire(x, z, R + 0.35, y1, rh, 4, mat, rot);
+      else spire(x, z, rs, y1, rh, n, mat, rot);
+      // lucarnes: small gabled windows on alternate faces of the spire
+      if (r > (goth ? 4.2 : 5) && roof !== 'pyr') for (let i = 0; i < 4; i++) {
+        const a = rot + (goth ? (i * 2 + 0.5) * TAU / n : i * PI / 2 + 0.3), d = rs * 0.66, dx = x + cos(a) * d, dz = z + sin(a) * d, y = y1 + rh * 0.16;
         box(dx, dz, -sin(a), cos(a), 0.6, 0.7, y, y + 1.6, 0); win(dx + cos(a) * 0.7, y + 0.1, dz + sin(a) * 0.7, cos(a), sin(a), 0.8, 1.3);
-        spire(dx, dz, 0.9, y + 1.6, 1.8, 4, mat, a + PI / 4);
+        spire(dx, dz, 0.9, y + 1.6, 2.2, 4, mat, a + PI / 4); finial(dx, dz, y + 3.8, 0.8);
       }
-      finial(x, z, top + 1 + rh, max(2, r * 0.4));
-      if (r > 3.8) for (let i = 0; i < (n === 4 ? 4 : 6); i++) { const a = rot + (i + 0.5) * TAU / (n === 4 ? 4 : 6) + (n === 4 ? PI / 4 : 0), d = R + 0.1, qx = x + cos(a) * d, qz = z + sin(a) * d; box(qx, qz, cos(a), sin(a), 0.35, 0.35, top + 0.6, top + 2.6, 5, -1); spire(qx, qz, 0.5, top + 2.6, 2.6, 4, 1, a + PI / 4); }
+      finial(x, z, y1 + rh, max(2, r * 0.4));
+      if (goth) for (let i = 0; i < n; i++) { const a = rot + i * TAU / n, d = R, qx = x + cos(a) * d, qz = z + sin(a) * d; box(qx, qz, cos(a), sin(a), 0.32, 0.32, top + 0.6, y1 + 3, 5, -1); spire(qx, qz, 0.46, y1 + 3, 3.4, 4, 5, a + PI / 4); }
+      else if (r > 3.8) for (let i = 0; i < (n === 4 ? 4 : 6); i++) { const a = rot + (i + 0.5) * TAU / (n === 4 ? 4 : 6) + (n === 4 ? PI / 4 : 0), d = R + 0.1, qx = x + cos(a) * d, qz = z + sin(a) * d; box(qx, qz, cos(a), sin(a), 0.35, 0.35, top + 0.6, top + 2.6, 5, -1); spire(qx, qz, 0.5, top + 2.6, 2.6, 4, 1, a + PI / 4); }
       COLC.push([x, z, R * 0.55, top + 1 + rh * 0.6]);
     }
     end();
@@ -146,6 +151,13 @@ function buildCastle() {
     // bays: buttresses with sloped caps, windows between
     const bay = o.bay || 5.6, nb = max(1, round(L / bay)), bl = L / nb;
     const great = o.great, rows = great ? 1 : max(1, floor((wh - 3) / 5.5));
+    // a tall substructure gets stepped buttresses all the way down, one per bay and at the corners
+    if (y0 - max(g, -2) > 8) for (const s of [-1, 1]) for (let i = 0; i <= nb; i++) {
+      const t = -hl + i * bl, q = hw + 1.1, bx0 = cx + ex * t + px * q * s, bz0 = cz + ez * t + pz * q * s, yb = max(g, -2), ym = (yb + y0) / 2;
+      box(bx0, bz0, ex, ez, 0.85, 0.85, yb, ym, 13, -1);
+      box(bx0 - px * 0.3 * s, bz0 - pz * 0.3 * s, ex, ez, 0.75, 0.55, ym, y0 - 1.5, 13, -1);
+      box(bx0 - px * 0.3 * s, bz0 - pz * 0.3 * s, ex, ez, 0.8, 0.6, y0 - 1.5, y0 - 0.6, 5, 5);
+    }
     for (const s of [-1, 1]) {
       for (let i = 0; i <= nb; i++) {
         const t = -hl + i * bl, bx0 = cx + ex * t + px * (hw + 0.5) * s, bz0 = cz + ez * t + pz * (hw + 0.5) * s;
@@ -164,15 +176,16 @@ function buildCastle() {
       }
       for (let i = 0; i < nb; i++) {
         const t = -hl + (i + 0.5) * bl, wx = cx + ex * t + px * hw * s, wz = cz + ez * t + pz * hw * s;
-        if (great) win(wx, y0 + 4, wz, px * s, pz * s, min(bl * 0.55, 3.4), wh * 0.62);
-        else for (let k = 0; k < rows; k++) if (rnd() > 0.08) win(wx, y0 + 2.2 + k * 5.5, wz, px * s, pz * s, min(bl * 0.4, 1.6), 3);
+        if (great) win(wx, y0 + 4, wz, px * s, pz * s, min(bl * 0.6, 3.8), wh * 0.66, true, 15);
+        else for (let k = 0; k < rows; k++) if (rnd() > 0.08) { const lw = min(bl * 0.22, 0.95), lit = rnd() < 0.9; for (const q of [-1, 1]) win(wx + ex * q * lw * 0.62, y0 + 1.8 + k * 5.5, wz + ez * q * lw * 0.62, px * s, pz * s, lw, 3.6, lit); }
       }
     }
     // gable ends: tall window, triangular gable in stone, corner pinnacles
     const rh = o.rh || w * 0.62, ov = 0.7;
     for (const s of [-1, 1]) {
       const gx = cx + ex * hl * s, gz = cz + ez * hl * s;
-      if (!o.noEnd?.includes(s)) win(gx, y0 + 3, gz, ex * s, ez * s, min(w * 0.3, 4), great ? wh * 0.7 : min(wh - 5, 8));
+      if (!o.noEnd?.includes(s)) win(gx, y0 + 3, gz, ex * s, ez * s, min(w * (great ? 0.42 : 0.3), great ? 6 : 4), great ? wh * 0.72 : min(wh - 5, 8), true, great ? 15 : 2);
+      if (o.rose) { const d = min(w * 0.46, rh * 0.62); win(gx + ex * s * 0.05, top + rh * 0.12, gz + ez * s * 0.05, ex * s, ez * s, d, d, true, 14); }
       m.quad([gx - px * (hw + ov), top - 0.4, gz - pz * (hw + ov)], [gx + px * (hw + ov), top - 0.4, gz + pz * (hw + ov)], [gx, top + rh, gz], [gx, top + rh, gz], 0, 0, top, w, top, w / 2, top + rh, w / 2, top + rh);
       { const k = m.nv - 4; if (m.b[k * 24 + 12] * ex * s + m.b[k * 24 + 14] * ez * s < 0) for (let j = 0; j < 4; j++) { m.b[(k + j) * 24 + 12] *= -1; m.b[(k + j) * 24 + 14] *= -1; } }
       finial(gx + ex * s * 0.2, gz + ez * s * 0.2, top + rh, 1.6);
@@ -230,9 +243,9 @@ function buildCastle() {
   const T = 100; // upper ward floor
 
   // great hall on the loch side, its tall windows facing the water
-  hallL(-98, 30, -38, 30, 21, T, 27, { great: true, fleche: true, rh: 16, dormers: false, fly: true });
+  hallL(-98, 30, -38, 30, 21, T, 30, { great: true, fleche: true, rh: 17, dormers: false, fly: true, rose: true });
   // the keep: the central mass
-  hallL(-28, -6, 24, -6, 27, T, 34, { turrets: true, rh: 17, fly: true });
+  hallL(-28, -6, 24, -6, 27, T, 40, { turrets: true, rh: 18, fly: true });
   // the observatory: the tallest landmark
   towerL(34, 28, T, 10, 118, { rh: 3.4 });
   towerL(22, 38, T, 4, 58, { rh: 3.4 });
@@ -338,7 +351,8 @@ function buildCastle() {
   // ---- west terrace (lower) toward the boathouse
   const B = 70;
   hall(-170, 38, -132, 70, 14, B, 18, { turrets: true });
-  hall(-128, 82, -96, 110, 12, B, 14, { pinn: true });
+  hall(-128, 82, -96, 110, 12, B, 17, { great: true, rose: true, fly: true, fleche: true, dormers: false, rh: 9 });
+  tower(-135, 87, B, 3.9, 30, { rh: 6.2 });
   tower(-176, 76, B, 7, 34, { rh: 3 });
   tower(-120, 40, B, 5, 30, { rh: 3.2, cu: true });
   tower(-92, 118, B, 5.5, 22, { roof: 'flat' });

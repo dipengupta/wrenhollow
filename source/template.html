@@ -83,11 +83,21 @@ button {
 #d:active { background: linear-gradient(var(--gold), #c98a3e); }
 
 /* detail level: three words, the current one underlined */
-#q { display: flex; align-items: baseline; gap: 1.1em; font-size: .85em; }
-#q span { font: italic 400 1.2em var(--serif); color: var(--dim); margin-right: .2em; }
-#q button { padding: .2em 0; color: var(--dim); font-weight: 500; }
-#q button:hover { color: var(--pale); }
-#q .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
+/* detail level and time of day: rows of words, the current one underlined */
+#q, #tm { display: flex; align-items: baseline; gap: 1.1em; font-size: .85em; }
+#q > span, #tm > span { flex: none; width: 3.6em; font: italic 400 1.2em var(--serif); color: var(--dim); }
+.o { display: flex; flex-wrap: wrap; gap: .45em 1.1em; }
+#q button, #tm button { padding: .2em 0; color: var(--dim); font-weight: 500; }
+#q button:hover, #tm button:hover { color: var(--pale); }
+#q .on, #tm .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
+#opts { display: grid; gap: .8em; }
+/* in the scene: the name of the time of day, shown for a moment when it changes */
+#n {
+  position: absolute; left: 0; right: 0; bottom: 12%; margin: 0; text-align: center; pointer-events: none;
+  font: 400 1.6em Cinzel, var(--serif); letter-spacing: .12em; color: var(--pale); text-shadow: 0 0 1em #000, 0 0 .3em #000; opacity: 0;
+}
+#n.on { animation: toast 2.4s ease-out; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(.4em); } 15%, 60% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
 /* list of controls: key caps as small outlined tiles */
 #k { display: flex; gap: 2.4em; font-size: .78em; letter-spacing: .08em; color: var(--dim); }
@@ -127,14 +137,17 @@ button {
 <body class=l>
 <canvas id=c></canvas>
 <div id=m>
-  <p id=t>A highland castle at dusk</p>
+  <p id=t>A castle above the loch</p>
   <h1>Wrenhollow</h1>
   <i id=r></i>
   <div id=a>
     <div id=l><div id=p><i id=b></i></div><p id=s>Raising the castle…</p><p id=w hidden>Best experienced in Google Chrome</p></div>
     <div id=g>
       <button id=d>Take flight</button>
-      <p id=q><span>Detail</span><button>Low</button><button>Medium</button><button>High</button></p>
+      <div id=opts>
+        <p id=tm><span>Time</span><i class=o></i></p>
+        <p id=q><span>Detail</span><i class=o><button>Low</button><button>Medium</button><button>High</button></i></p>
+      </div>
       <div id=k>
         <p>
           <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Fly
@@ -144,6 +157,7 @@ button {
         </p>
         <p>
           <i><b>Esc</b></i>Menu
+          <i><b>T</b></i>Time of day
           <i><b>M</b></i>Mute
           <i><b>H</b></i>Stats
         </p>
@@ -154,6 +168,7 @@ button {
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>
+<p id=n></p>
 <script>
 /*SCRIPT*/
 </script>

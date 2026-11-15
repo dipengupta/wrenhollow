@@ -31,15 +31,21 @@ const mod = (code) => device.createShaderModule({ code });
 const buf = (data, usage) => { const b = device.createBuffer({ size: max(16, (data.byteLength + 3) & ~3), usage: usage | BU.COPY_DST }); Q.writeBuffer(b, 0, data.buffer || data, data.byteOffset || 0, data.byteLength); return b; };
 const tex = (w, h, format, usage, o = {}) => device.createTexture({ size: [w, h], format, usage, mipLevelCount: o.mips || 1, sampleCount: o.samples || 1 });
 
-// ---------------------------------------------------------------- the sun
-// low in the south-west, about 7 degrees up; its colour is the sunlight that survives the atmosphere
-const SUN = (() => { const v = [-0.64, 0.082, 0.765], l = hypot(...v); return v.map((c) => c / l); })();
-const SUNC = (() => {
+// ---------------------------------------------------------------- light: the sun (or the moon), set from the time of day in env.js
+const SUN = [0, 1, 0], SUNC = [0, 0, 0], AMB = [0, 0, 0];
+let EXPO = 1, RAYS = 0.55;
+// the sunlight that survives the atmosphere along direction d
+const sunColor = (d) => {
   const RE = 6360e3, BR = [5.8e-6, 13.5e-6, 33.1e-6], BM = 3.2e-5 * 1.11, BO = [0.65e-6, 1.881e-6, 0.085e-6]; let r = 0, m = 0, o = 0;
-  for (let i = 0; i < 400; i++) { const s = (i + 0.5) * 500, x = SUN[0] * s, y = RE + 150 + SUN[1] * s, z = SUN[2] * s, h = hypot(x, y, z) - RE; r += exp(-h / 8000) * 500; m += exp(-h / 1400) * 500; o += max(0, 1 - abs(h - 25e3) / 15e3) * 500; }
-  return [0, 1, 2].map((k) => [7.5, 6.8, 7.2][k] * exp(-(BR[k] * r + BM * m + BO[k] * o)));
-})();
-const AMB = [0.30, 0.31, 0.46];
+  for (let i = 0; i < 400; i++) { const s = (i + 0.5) * 500, x = d[0] * s, y = RE + 150 + d[1] * s, z = d[2] * s, h = hypot(x, y, z) - RE; r += exp(-h / 8000) * 500; m += exp(-h / 1400) * 500; o += max(0, 1 - abs(h - 25e3) / 15e3) * 500; }
+  return [0, 1, 2].map((k) => [7.5, 6.8, 7.2][k] * exp(-(BR[k] * r + BM * m + BO[k] * o)) || 0);
+};
+const setLight = (t) => {
+  const l = hypot(...t.light); for (let k = 0; k < 3; k++) SUN[k] = t.light[k] / l;
+  const c = sunColor(SUN); for (let k = 0; k < 3; k++) { SUNC[k] = c[k] * t.scale * t.tint[k]; AMB[k] = t.amb[k]; }
+  EXPO = t.expo; RAYS = t.rays;
+};
+setLight(TOD[tod]);
 
 // ---------------------------------------------------------------- static resources
 const sRep = device.createSampler({ addressModeU: 'repeat', addressModeV: 'clamp-to-edge', magFilter: 'linear', minFilter: 'linear' });
@@ -49,8 +55,8 @@ const tShadow = tex(SHADOW, SHADOW, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BIN
 const tDummy = tex(1, 1, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tDummyC = tex(1, 1, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tSky = tex(512, 256, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
-const UB = new Float32Array(64), UBR = new Float32Array(64), UBS = new Float32Array(64);
-const ubo = device.createBuffer({ size: 256, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 256, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 256, usage: BU.UNIFORM | BU.COPY_DST });
+const UB = new Float32Array(76), UBR = new Float32Array(76), UBS = new Float32Array(76);
+const ubo = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST });
 const bHC = device.createBuffer({ size: CN * CN * 4, usage: BU.STORAGE | BU.COPY_SRC }), bHF = device.createBuffer({ size: FN * FN * 4, usage: BU.STORAGE | BU.COPY_SRC });
 
 const VF = SS.VERTEX | SS.FRAGMENT;
@@ -109,8 +115,8 @@ const colorAtt = (view, clear) => ({ view, loadOp: clear ? 'clear' : 'load', sto
 const mRays = mod(W_RAYS), mPost = mod(W_POST);
 const pRays = device.createRenderPipeline({ layout: 'auto', vertex: { module: mRays, entryPoint: 'vs' }, fragment: { module: mRays, entryPoint: 'fs', targets: [{ format: HDR }] } });
 const pPost = device.createRenderPipeline({ layout: 'auto', vertex: { module: mPost, entryPoint: 'vs' }, fragment: { module: mPost, entryPoint: 'fs', targets: [{ format: FMT }] } });
-const RS = new Float32Array(4), PP = new Float32Array(4);
-const uboRays = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST }), uboPost = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST });
+const RS = new Float32Array(4), PP = new Float32Array(8);
+const uboRays = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST }), uboPost = device.createBuffer({ size: 32, usage: BU.UNIFORM | BU.COPY_DST });
 
 // ---------------------------------------------------------------- terrain: generate, read back, bake the sky
 await say('Raising the highlands…', 0.2, 900);
@@ -125,16 +131,22 @@ addEventListener('pagehide', () => keep('wrenhollowLoad', ''));
     const c = e.beginComputePass(); c.setPipeline(p); c.setBindGroup(0, bg); c.dispatchWorkgroups(ceil(n / 8), ceil(n / 8)); c.end();
     const r = device.createBuffer({ size: n * n * 4, usage: BU.MAP_READ | BU.COPY_DST }); e.copyBufferToBuffer(b, 0, r, 0, n * n * 4); rb.push(r);
   }
-  // sky: single scattering for every direction, once
-  const ms = mod(W_SKYBAKE), ps = device.createRenderPipeline({ layout: 'auto', vertex: { module: ms, entryPoint: 'vs' }, fragment: { module: ms, entryPoint: 'fs', targets: [{ format: HDR }] } });
-  const r = e.beginRenderPass({ colorAttachments: [colorAtt(tSky.createView(), true)] });
-  r.setPipeline(ps); r.setBindGroup(0, device.createBindGroup({ layout: ps.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf(new Float32Array([...SUN, 0]), BU.UNIFORM) } }] }));
-  r.draw(3); r.end();
   Q.submit([e.finish()]);
   await Promise.all(rb.map((b) => b.mapAsync(GPUMapMode.READ)));
   HC = new Float32Array(rb[0].getMappedRange().slice(0)); HF = new Float32Array(rb[1].getMappedRange().slice(0));
   for (const b of rb) { b.unmap(); b.destroy(); }
 }
+// sky: single scattering for every direction, baked again whenever the time of day changes
+const pSkyBake = (() => { const ms = mod(W_SKYBAKE); return device.createRenderPipeline({ layout: 'auto', vertex: { module: ms, entryPoint: 'vs' }, fragment: { module: ms, entryPoint: 'fs', targets: [{ format: HDR }] } }); })();
+const uSkyBake = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST });
+const bgSkyBake = device.createBindGroup({ layout: pSkyBake.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uSkyBake } }] });
+function bakeSky() {
+  Q.writeBuffer(uSkyBake, 0, new Float32Array([...SUN, TOD[tod].sky]));
+  const e = device.createCommandEncoder(), r = e.beginRenderPass({ colorAttachments: [colorAtt(tSky.createView(), true)] });
+  r.setPipeline(pSkyBake); r.setBindGroup(0, bgSkyBake); r.draw(3); r.end();
+  Q.submit([e.finish()]);
+}
+bakeSky();
 // per patch height range, for culling
 const PLO = new Float32Array(NPC * NPC), PHI = new Float32Array(NPC * NPC), FLO = new Float32Array(NPF * NPF), FHI = new Float32Array(NPF * NPF);
 for (const [A2, n, np, lo, hi] of [[HC, CN, NPC, PLO, PHI], [HF, FN, NPF, FLO, FHI]]) for (let pz = 0; pz < np; pz++) for (let px = 0; px < np; px++) {
@@ -178,8 +190,8 @@ const ibTerr = (() => {
   return buf(new Uint32Array(all), BU.INDEX);
 })();
 
-// ---------------------------------------------------------------- shadow map (static sun, static world): baked once
-{
+// ---------------------------------------------------------------- shadow map (static light, static world): baked again when the time changes
+function bakeShadow() {
   const L = SUN, lr = [-L[2], 0, L[0]], ll = hypot(...lr); lr[0] /= ll; lr[2] /= ll;
   const lu = [L[1] * lr[2] - L[2] * lr[1], L[2] * lr[0] - L[0] * lr[2], L[0] * lr[1] - L[1] * lr[0]];
   const dot = (a, x, y, z) => a[0] * x + a[1] * y + a[2] * z;
@@ -194,7 +206,7 @@ const ibTerr = (() => {
   m[2] = -L[0] / dz; m[6] = -L[1] / dz; m[10] = -L[2] / dz; m[14] = b[5] / dz;
   m[3] = 0; m[7] = 0; m[11] = 0; m[15] = 1;
   for (let i = 0; i < 16; i++) UBS[16 + i] = UB[16 + i] = UBR[16 + i] = m[i];
-  for (const u of [UB, UBR, UBS]) { u[36] = SUN[0]; u[37] = SUN[1]; u[38] = SUN[2]; u[56] = SUNC[0]; u[57] = SUNC[1]; u[58] = SUNC[2]; u[60] = AMB[0]; u[61] = AMB[1]; u[62] = AMB[2]; }
+  lightUB();
   UBR[39] = 1; UBS[32] = 0; UBS[33] = 300; UBS[34] = 0;
   Q.writeBuffer(uboS, 0, UBS);
   const e = device.createCommandEncoder();
@@ -206,6 +218,20 @@ const ibTerr = (() => {
   for (let c = 0; c < TCELLS * TCELLS; c++) for (const k of [0, 1]) { const a = TW.start[c * 2 + k], n = TW.start[c * 2 + k + 1] - a; if (n) r.drawIndexed(TR[k ? 4 : 1][1], n, TR[k ? 4 : 1][0], 0, a); }
   r.end();
   Q.submit([e.finish()]);
+}
+// the light and the look of the time of day into all three uniform arrays
+function lightUB() {
+  const t = TOD[tod];
+  for (const u of [UB, UBR, UBS]) {
+    u[36] = SUN[0]; u[37] = SUN[1]; u[38] = SUN[2]; u[56] = SUNC[0]; u[57] = SUNC[1]; u[58] = SUNC[2]; u[60] = AMB[0]; u[61] = AMB[1]; u[62] = AMB[2];
+    u[64] = t.night; u[65] = t.glow; u[66] = 0; u[67] = t.grade;
+  }
+}
+bakeShadow();
+// switch the time of day: new light, sky and shadows; nothing else is rebuilt
+function applyTime(i) {
+  tod = (i + TOD.length) % TOD.length; try { localStorage.wrenhollowTime = tod; } catch {}
+  setLight(TOD[tod]); bakeSky(); bakeShadow();
 }
 
 
@@ -331,7 +357,7 @@ function flyAt() {
 // ---------------------------------------------------------------- frame
 let hud = false;
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
-const TANH = 0.62, NEAR = 0.15, EXPO = 0.78, RAYS = 0.55;
+const TANH = 0.62, NEAR = 0.15;
 const submitList = [null];
 let DBG = 0; // dev.js only: bit mask of passes to skip, for profiling
 const C = new Float64Array(11); // camera basis of the pass being encoded: position, forward, right (x, z), up
@@ -361,6 +387,24 @@ function inView(x0, y0, z0, x1, y1, z1) {
   if (abs(px * rx + pz * rz) - ex * abs(rx) - ez * abs(rz) > lim * TANH * W / H2) return false;
   return abs(px * ux + py * uy + pz * uz) - ex * abs(ux) - ey * abs(uy) - ez * abs(uz) <= lim * TANH;
 }
+// open water as boxes (64 m cells in the core, 512 m beyond): the loch's reflection is only drawn when one is in view
+const WC = (() => {
+  const a = [];
+  for (let cz = 0; cz < 32; cz++) for (let cx = 0; cx < 32; cx++) {
+    let w = false;
+    for (let j = 0; j < 64 && !w; j += 4) for (let i = 0; i < 64; i += 4) if (HC[cx * 64 + i + (cz * 64 + j) * CN] < 0.3) { w = true; break; }
+    if (w) a.push(CO + cx * 64, CO + cz * 64, CO + cx * 64 + 64, CO + cz * 64 + 64);
+  }
+  for (let cz = 0; cz < 32; cz++) for (let cx = 0; cx < 32; cx++) {
+    const x0 = FO + cx * 512, z0 = FO + cz * 512;
+    if (x0 >= CO && x0 + 512 <= -CO && z0 >= CO && z0 + 512 <= -CO) continue;
+    let w = false;
+    for (let j = 0; j < 16 && !w; j++) for (let i = 0; i < 16; i++) if (HF[cx * 16 + i + (cz * 16 + j) * FN] < 0.3) { w = true; break; }
+    if (w) a.push(x0, z0, x0 + 512, z0 + 512);
+  }
+  return new Float32Array(a);
+})();
+function waterInView() { for (let i = 0; i < WC.length; i += 4) if (inView(WC[i], -1, WC[i + 1], WC[i + 2], 1.5, WC[i + 3])) return true; return false; }
 // terrain patches: level of detail by distance; refl draws one level coarser
 function drawTerrain(r, pl, plFar, refl) {
   r.setPipeline(pl); r.setIndexBuffer(ibTerr, 'uint32');
@@ -406,12 +450,13 @@ function drawTrees(r, pl, refl) {
 }
 function render() {
   camUB(UB, false); Q.writeBuffer(ubo, 0, UB);
+  const wet = waterInView();
   camUB(UBR, true); Q.writeBuffer(uboR, 0, UBR);
   // the sun on screen, for the shafts
   { const sf = SUN[0] * F[FX] + SUN[1] * F[FY] + SUN[2] * F[FZ]; const asp = W / H2;
     RS[0] = 0.5 + 0.5 * (SUN[0] * F[RX] + SUN[2] * F[RZ]) / max(sf, 0.05) / (TANH * asp); RS[1] = 0.5 - 0.5 * (SUN[0] * F[UX] + SUN[1] * F[UY] + SUN[2] * F[UZ]) / max(sf, 0.05) / TANH;
     RS[2] = sf > 0 ? RAYS * sstep(0, 0.35, sf) : 0; RS[3] = asp; Q.writeBuffer(uboRays, 0, RS); }
-  PP[0] = 1; PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; Q.writeBuffer(uboPost, 0, PP);
+  PP[0] = EXPO; PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; PP[4] = TOD[tod].grade; PP[5] = TOD[tod].night; Q.writeBuffer(uboPost, 0, PP);
 
   const e = device.createCommandEncoder();
   let slot = null;
@@ -421,14 +466,14 @@ function render() {
   // the world mirrored in the loch (only drawn when the camera is near enough to the water to see it matter)
   let r = e.beginRenderPass(passRefl);
   r.setBindGroup(0, bgR);
-  if (!(DBG & 1)) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); drawTrees(r, R.tree, true); r.setPipeline(R.sky); r.draw(3); }
+  if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); drawTrees(r, R.tree, true); r.setPipeline(R.sky); r.draw(3); }
   r.end();
   camUB(UB, false);
   r = e.beginRenderPass(passScene);
   r.setBindGroup(0, bg0);
   if (!(DBG & 2)) drawCastle(r, P.solid);
   if (!(DBG & 4)) drawTerrain(r, P.terr, P.far, false);
-  if (!(DBG & 8)) { r.setPipeline(P.water); r.draw(4); }
+  if (!(DBG & 8) && wet) { r.setPipeline(P.water); r.draw(4); }
   if (!(DBG & 16)) drawTrees(r, P.tree, false);
   r.setPipeline(P.banner); r.draw(6 * 24, NBAN);
   r.setPipeline(P.boat); r.draw(30, 3);
@@ -523,6 +568,7 @@ const key = (e, v) => {
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
+      else if (e.code === 'KeyT') setTime(tod + 1, true);
       else if (e.code === 'Escape') ui(true);
       else if (e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
     }
@@ -561,6 +607,16 @@ const go = () => {
   if (!mob) capture();
 };
 bDive.onclick = go; $('o').onclick = () => ui(true);
+// time of day: one button per entry in TOD; the choice goes into the address too, so a look can be shared
+const bTime = $('tm').lastChild;
+for (let i = 0; i < TOD.length; i++) { const b = document.createElement('button'); b.textContent = TOD[i].name; b.onclick = () => setTime(i); bTime.append(b); }
+function setTime(i, say) {
+  applyTime(i);
+  bTime.querySelectorAll('button').forEach((b, k) => { b.className = k === tod ? 'on' : ''; });
+  try { const u = new URL(location.href); u.searchParams.set('time', TOD[tod].name.toLowerCase().replace(' ', '')); history.replaceState(null, '', u); } catch {}
+  if (say) { const n = $('n'); n.textContent = TOD[tod].name; n.className = ''; void n.offsetWidth; n.className = 'on'; }
+}
+bTime.querySelectorAll('button')[tod].className = 'on';
 $('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('wrenhollow', 2 - i); location.reload(); }; });
 document.addEventListener('pointerlockchange', () => ui(!document.pointerLockElement));
 

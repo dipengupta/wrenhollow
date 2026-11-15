@@ -26,6 +26,13 @@ fn fbm(p: vec3f, n: i32) -> f32 {
   for (var i = 0; i < n; i++) { s += a * vn(q); q = q * 2.03 + vec3f(17.1, 31.7, 5.3); a *= .5; }
   return s / (1. - 2. * a);
 }
+// the gorge east of the castle: distance from its meandering centre line, and the height of its floor
+fn ravD(p: vec2f) -> f32 {
+  let m = 30. * (fbm2(p * vec2f(.002, .0075) + 4., 3) - .5) + 4. * (vn2(p * .03) - .5);
+  let pa = p + vec2f(m, 0.) - vec2f(205., -330.); let ba = vec2f(-15., 545.);
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.));
+}
+fn ravF(z: f32) -> f32 { return mix(19., 1., ss(-300., 200., z)); }
 `;
 
 // ---------------------------------------------------------------- terrain height field (compute, load time)
@@ -55,7 +62,7 @@ fn plat(h: f32, p: vec2f, a: vec2f, b: vec2f, r: f32, t: f32, k: f32, j: f32) ->
   let dr = t - c;
   // buttresses of rock, ledges and gullies down the face
   c += min(dr * .35, 1.) * (9. * (fbm2(p * .07 + t, 3) - .5) + 4. * (fbm2(p * .23, 2) - .5));
-  c -= min(dr * .1, 1.) * 1.2 * ss(.3, .7, fract(c / 13. + 2. * fbm2(p * .03, 2)));
+  c -= min(dr * .1, 1.) * 1.2 * ss(.3, .7, fract(c / 13. + 2. * fbm2(p * .03, 2))) * ss(1.5, 4., k);
   return smax(h, c - .4 * fbm2(p * .3, 2), 4.);
 }
 fn hgt(p: vec2f) -> f32 {
@@ -91,11 +98,22 @@ fn hgt(p: vec2f) -> f32 {
   h = smax(h, c, 8.);
   // north hill where the viaduct lands, and the east hill across the ravine
   h = plat(h, p, vec2f(-30., -335.), vec2f(-30., -360.), 30., 100., 2.2, cj);
-  h = plat(h, p, vec2f(265., -70.), vec2f(320., -40.), 60., 88., 3., cj);
-  // the ravine between the north-east court and the east hill
-  let rv = seg(p + vec2f(14. * (fbm2(p * .008 + 4., 2) - .5), 0.), vec2f(205., -320.), vec2f(190., 210.)) + 7. * (fbm2(p * .03, 2) - .5);
-  let rf = mix(26., 1., ss(-320., 200., p.y));
-  h = smin(h, rf + mix(1.6, 4.2, fbm2(p * .02 + 7., 2)) * max(rv - 5., 0.) + 9. * (fbm2(p * .05, 3) - .5) * ss(5., 25., rv), 5.);
+  h = plat(h, p, vec2f(265., -70.), vec2f(320., -40.), 48., 88., .75, cj);
+  // the gorge between the north-east court and the east hill: the gap is filled to the rim first, so the gorge is the
+  // only way down, then cut as one channel: a narrow floor, scree fans, then stepped and gullied walls
+  let rv = ravD(p); let rf = ravF(p.y);
+  // the rim: shoulders that fall away gently from the gorge, lowering toward its north end where it opens out
+  // north of the bridge the gorge relaxes into an open glen
+  let gl = max(ss(-140., -230., p.y), ss(-20., 70., p.y));
+  h = mix(h, max(h, 84. + 3. * fbm2(p * .03, 2) - 40. * ss(34., 110., rv + 25. * (fbm2(p * .012, 2) - .5))), ss(-215., -150., p.y) * ss(10., -60., p.y));
+  { let w = 3.5 + 3. * vn2(p * .012) + 6. * ss(40., 160., p.y);
+    let e = max(rv - w, 0.);
+    let rib = 1. - abs(vn2(p * vec2f(.08, .2)) * 2. - 1.);
+    let ew = e + 3.5 * rib * ss(5., 14., e) + 3. * (vn2(p * .11) - .5) * ss(3., 9., e);
+    var g = rf + .55 * min(ew, 9.) * (.6 + .8 * vn2(p * .07 + 3.)) + mix(2.8, .42, gl) * max(ew - 9., 0.);
+    g -= 2.4 * ss(.4, .85, fract(g / 12. + 1.5 * fbm2(p * .025, 2))) * ss(10., 18., e);
+    g += 5. * (fbm2(p * .06, 3) - .5) * ss(9., 22., e);
+    h = smin(h, g, 3.); }
   // the village shelf
   let vd = length((p - vec2f(250., -430.)) * vec2f(.8, 1.));
   h = mix(h, 24. + 2. * fbm2(p * .02, 2), ss(150., 70., vd));
@@ -146,7 +164,7 @@ fn tr(p: vec3f, d: vec3f) -> vec3f {
   }
   // a little multiple scattering so the shadowed sky is not black
   L += (BR * .55 + vec3f(BM * .12)) * od.x * .015 * vec3f(.9, .8, 1.);
-  return vec4f(L * 22., 1.);
+  return vec4f(L * 22. * sun.w, 1.);
 }
 `;
 
@@ -155,6 +173,9 @@ const S_G = W_NOISE + /*wgsl*/`
 struct U {
   vp: mat4x4f, sh: mat4x4f,
   cam: vec4f, sun: vec4f, scr: vec4f, rt: vec4f, up: vec4f, fw: vec4f, sunc: vec4f, amb: vec4f,
+  env: vec4f,  // night 0..1, window glow, cloud cover, grade
+  env2: vec4f, // seasons: snow, foliage, wet, fog
+  env3: vec4f, // weather: precipitation, wind, -, -
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var sRep: sampler;
@@ -233,7 +254,7 @@ fn clipW(p: vec3f) { if (u.sun.w > .5 && p.y < -.05) { discard; } }
 // ---------------------------------------------------------------- terrain (core and far grids, LOD by instance)
 const W_TERR = S_G + /*wgsl*/`
 override FAR: bool = false;
-struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n: vec3f };
+struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n: vec3f, @location(2) rv: f32, @location(3) sl: f32 };
 fn hAt(x: i32, z: i32) -> f32 {
   if (FAR) { let n = i32(FN); return HF[u32(clamp(x, 0, n - 1) + clamp(z, 0, n - 1) * n)]; }
   let n = i32(CN); return HC[u32(clamp(x, 0, n - 1) + clamp(z, 0, n - 1) * n)];
@@ -256,22 +277,29 @@ fn hAt(x: i32, z: i32) -> f32 {
     else if (side == 2u) { gx = bx; gz = bz + a; } else { gx = bx + e; gz = bz + a; }
   }
   var h = hAt(gx, gz);
-  let nx = hAt(gx - st, gz) - hAt(gx + st, gz); let nz = hAt(gx, gz - st) - hAt(gx, gz + st);
+  // normals over two cells: smoother shading on sharp ridges, the per-pixel bump puts the fine detail back
+  let s2 = st * 2;
+  let nx = hAt(gx - s2, gz) - hAt(gx + s2, gz); let nz = hAt(gx, gz - s2) - hAt(gx, gz + s2);
   let wp = vec3f(org + f32(gx) * sp, 0., org + f32(gz) * sp);
   h -= drop * (2. + 3. * f32(st)) * select(1., 6., FAR);
   if (FAR && abs(wp.x) < 1023. && abs(wp.z) < 1023.) { h -= 60.; }
   var o: VO;
   o.p = vec3f(wp.x, h, wp.z);
-  o.n = normalize(vec3f(nx, 2. * f32(st) * sp, nz));
+  o.n = normalize(vec3f(nx, 2. * f32(s2) * sp, nz));
+  // slope over a wider footprint: material boundaries follow the land, not single triangles
+  let s3 = st * 3; o.sl = 1. - normalize(vec3f(hAt(gx - s3, gz) - hAt(gx + s3, gz), 2. * f32(s3) * sp, hAt(gx, gz - s3) - hAt(gx, gz + s3))).y;
+  // distance from the gorge's centre line: smooth at this scale, so per vertex is enough
+  o.rv = 1e3; if (!FAR && abs(wp.x - 200.) < 100. && wp.z > -370. && wp.z < 250.) { o.rv = ravD(wp.xz); }
   o.pos = u.vp * vec4f(o.p, 1.);
   return o;
 }
-fn rock(p: vec3f, near: bool) -> vec3f {
-  let s = fbm(p * vec3f(.25, .6, .25), select(2, 3, near)); let st = vn(vec3f(p.x * .04, p.y * .9, p.z * .04));
-  var c = mix(vec3f(.10, .105, .11), vec3f(.23, .23, .235), s) * (.65 + .6 * st);
-  if (near) { c *= (.8 + .4 * vn(p * vec3f(.9, .25, .9))) * (.85 + .3 * vn(p * 3.1)); c *= 1. - .3 * ss(.9, .97, vn(vec3f(p.x * .35, p.y * .04, p.z * .35)) ) ; }
-  c *= .85 + .3 * ss(.3, .7, vn(vec3f(p.x * .02, p.y * .35, p.z * .02)));          // layers
-  c *= 1. - .35 * ss(.55, .8, vn(vec3f(p.x * .25, p.y * .015, p.z * .25)));        // rain stains
+fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
+  var s = f; if (s < 0.) { s = fbm(p * vec3f(.25, .6, .25), select(2, 3, near)); }
+  let st = vn(vec3f(p.x * .04, p.y * .9, p.z * .04));
+  var c = mix(vec3f(.14, .128, .112), vec3f(.25, .228, .2), s) * (.82 + .3 * st);
+  if (near) { c *= (.86 + .28 * vn(p * vec3f(.9, .25, .9))) * (.88 + .24 * vn(p * 3.1)); c *= 1. - .18 * ss(.9, .97, vn(vec3f(p.x * .35, p.y * .04, p.z * .35)) ) ; }
+  c *= .9 + .18 * ss(.3, .7, vn(vec3f(p.x * .02, p.y * .35, p.z * .02)));          // layers
+  c *= 1. - .2 * ss(.55, .8, vn(vec3f(p.x * .25, p.y * .015, p.z * .25)));         // rain stains
   c = mix(c, vec3f(.26, .28, .17), ss(.68, .8, vn(p * .2 + 3.)) * .35);          // lichen
   return c;
 }
@@ -281,46 +309,75 @@ fn rock(p: vec3f, near: bool) -> vec3f {
   // detail normal, faded with distance against shimmer
   let sl0 = 1. - n.y;
   // ground ripple on the flats, strata and boulders on the rock faces, faded out with distance
-  let rf = ss(.2, .45, sl0); let near = d < 450. && !FAR;
+  let rf = ss(.2, .45, sl0); let near = d < 450. && !FAR && u.sun.w < .5; // the reflection is blurred: no near detail
   var bh = 0.;
-  if (near) { bh = fbm2(p.xz * 1.3, 2) * .35; if (rf > .01) { bh = mix(bh, fbm(p * vec3f(.3, .55, .3), 3) * 2. + vn(p * 2.3) * .22 * (1. - ss(30., 120., d)), rf); } bh *= 1. - ss(80., 450., d); }
+  var crk = 0.; var rfb = -1.;
+  if (near) { bh = fbm2(p.xz * 1.3, 2) * .35;
+    if (rf > .01) {
+      // rock faces: big lumps, bedding ledges along a tilted plane, and (close up) fractures and grain
+      let bed = p.y * .21 + .05 * (p.x - p.z) + 1.6 * vn(p * .07);
+      let ly = fract(bed);
+      rfb = fbm(p * vec3f(.3, .55, .3), 3);
+      var r = rfb * 1.4 + .45 * ss(.05, .55, ly) * ss(1., .6, ly);
+      let cl = 1. - ss(15., 70., d);
+      if (cl > 0.) {
+        // joints: mostly vertical fractures, broken where the bedding changes
+        crk = ss(.82, .97, 1. - abs(vn(p * vec3f(.45, .09, .45) + 7.) * 2. - 1.));
+        r += cl * (vn(p * 2.3) * .25 - crk * .3);
+        crk *= cl;
+      }
+      bh = mix(bh, r, rf);
+    }
+    bh *= 1. - ss(80., 450., d); }
   let nb = bump(n, p, bh);
   if (u.sun.w < .5) { n = nb; }
   let sl = 1. - n.y;
   // grass / heather / bracken, rock on steep ground, shingle by the water, snow on the high tops
-  let m1 = fbm2(p.xz * .012, 3); let mh = fbm2(p.xz * .03 + 9., select(1, 3, near)); var m2 = .5; var m3 = .5;
+  let m1 = fbm2(p.xz * .012, 3); var m2 = .5; var m3 = .5;
   if (near) { m2 = fbm2(p.xz * .07 + 4., 2); m3 = vn2(p.xz * .5) * .6 + vn2(p.xz * 1.7) * .4; } else if (!FAR) { m2 = vn2(p.xz * .07 + 4.); }
-  var al = mix(vec3f(.13, .17, .055), vec3f(.20, .21, .07), m2);
-  al = mix(al, vec3f(.22, .19, .09), ss(.45, .85, m1 + .3 * (m2 - .5)) * .4);                    // dry golden grass
+  let rk = ss(.13, .42, mix(sl0, i.sl, .7) + .2 * (m2 - .5) + .16 * (vn2(p.xz * .7) - .5));
   let far = ss(900., 2500., d);
-  al = mix(al, vec3f(.15, .11, .11), ss(.5, .8, mh + .3 * (m3 - .5)) * ss(.1, .3, 1. - n.y) * ss(30., 80., p.y) * .45 * (1. - far * .8)); // heather on the slopes
+  var al = vec3f(0.);
+  if (rk < .995) {
+  let mh = fbm2(p.xz * .03 + 9., select(1, 3, near));
+  al = mix(vec3f(.11, .155, .06), vec3f(.18, .2, .08), m2);
+  al = mix(al, vec3f(.22, .19, .09), ss(.45, .85, m1 + .3 * (m2 - .5)) * .4);                    // dry golden grass
+  al = mix(al, vec3f(.15, .11, .11), ss(.5, .8, mh + .3 * (m3 - .5)) * ss(.1, .3, 1. - n.y) * ss(30., 80., p.y) * .45 * (1. - far * .4)); // heather on the slopes
   al = mix(al, vec3f(.27, .13, .05), ss(.62, .72, 1. - mh + .3 * (m2 - .5)) * .3 * (1. - far * .7)); // bracken
-  al = mix(al, vec3f(.15, .14, .08), far * .5);
+  al = mix(al, mix(vec3f(.13, .14, .07), vec3f(.17, .13, .1), ss(.4, .7, fbm2(p.xz * .0025, 2))), far * .35);
   al *= .8 + .4 * m3;
-  let rk = ss(.18, .36, sl0 + .15 * (m2 - .5));
-  if (rk > .01) { al = mix(al, rock(p, near), rk); }
+  }
+  if (rk > .01) { al = mix(al, rock(p, near, rfb) * (1. - .25 * min(crk, 1.)), rk); }
   let shore = ss(2.5, .3, p.y + .8 * (m3 - .5));
   al = mix(al, mix(vec3f(.30, .27, .22), vec3f(.18, .16, .13), m3), shore);
   al = mix(al, vec3f(.13, .1, .07), ss(.5, -1.5, p.y));
-  // the burn in the ravine floor
+  // the gorge: scree and pebbles on the floor and the fans, the burn down the middle
   var stream = vec3f(0.);
-  { let pa = p.xz - vec2f(205., -320.); let ba = vec2f(-15., 530.); let rd = length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.));
-    let wob = rd + 1.2 * (vn2(p.xz * .15) - .5);
-    al = mix(al, mix(vec3f(.2, .19, .17), vec3f(.32, .3, .27), m3) * (.6 + .5 * vn2(p.xz * 3.)), ss(9., 5., wob) * ss(40., 10., p.y));
-    let wet = ss(2.6, 1.6, wob) * ss(40., 10., p.y);
+  if (i.rv < 40.) {
+    let rd = i.rv; let above = p.y - ravF(p.z);
+    let scr = ss(17., 8., rd + 3. * (m3 - .5)) * ss(22., 6., above);
+    al = mix(al, mix(vec3f(.16, .15, .135), vec3f(.31, .29, .26), m3) * (.5 + .7 * vn2(p.xz * 2.3)) * (.8 + .4 * vn2(p.xz * 9.)), scr);
+    let wob = rd + 1.1 * (vn2(p.xz * .15) - .5);
+    let wet = ss(2.7, 1.7, wob) * ss(3., .5, above);
+    al = mix(al, al * .45, ss(4.5, 2.5, wob) * ss(3., .5, above));
     if (wet > 0.) {
       let rp = vec2f(vn2(vec2f(p.x * 3., p.z * 1.2 - u.cam.w * 2.)), vn2(vec2f(p.x * 3. + 5., p.z * 1.2 - u.cam.w * 2.))) - .5;
       let wn = normalize(vec3f(rp.x * .25, 1., rp.y * .25)); let V = normalize(u.cam.xyz - p);
       let fr = .03 + .97 * pow(1. - max(dot(wn, V), 0.), 5.);
-      let wc = mix(vec3f(.015, .018, .016), skyL(reflect(-V, wn)), fr) + vec3f(.6) * ss(2.3, 2.55, wob) * .5;
+      let wc = mix(vec3f(.015, .018, .016), skyL(reflect(-V, wn)), fr) + vec3f(.6) * ss(2.4, 2.65, wob) * .5 * vn2(p.xz * 1.3 + u.cam.w * vec2f(0., -1.5));
       al = mix(al, vec3f(.02), wet); stream = wc * wet; n = normalize(mix(n, vec3f(0., 1., 0.), wet));
     }
   }
   let snow = ss(620., 760., p.y + 140. * (m1 - .5)) * ss(.55, .3, sl);
-  al = mix(al, vec3f(.85, .87, .9), snow);
-  var sh = 1.; if (!FAR) { sh = shadowAt(p, normalize(i.n)); }
+  al = mix(al, vec3f(.72, .74, .78), snow);
+  // shadows: pushed further off faces the light only grazes, and faded on the smooth normal, so the edge of the light
+  // follows the shape of the land rather than single triangles
+  let nG = normalize(i.n); let gL = dot(nG, u.sun.xyz);
+  var sh = ss(-.03, .1, gL + .3 * ss(.4, .05, u.sun.y) * (1. - rk)); if (!FAR) { sh *= shadowAt(p + nG * 1.2 * ss(.35, 0., gL), nG); }
   let ao = mix(.7, 1., ss(-5., 30., p.y));
-  var c = lit(al, n, p, sh, ao, snow * .3 + shore * .2, 20.) + stream;
+  // grass scatters light: a wrapped response (the normal leans toward the sun) keeps grazing light from picking out facets
+  let nl = normalize(n + u.sun.xyz * .45 * ss(.4, .05, u.sun.y) * (1. - rk) * (1. - snow));
+  var c = lit(al, nl, p, sh, ao, snow * .3 + shore * .2, 20.) + stream;
   clipW(p);
   return vec4f(aerial(c, p), 1.);
 }
@@ -342,13 +399,15 @@ fn ashlar(uv: vec2f, bw: f32, bh: f32) -> vec4f {
 }
 fn stoneCol(p: vec3f, uv: vec2f, dark: f32) -> vec4f {
   let a = ashlar(uv, .95, .42);
-  var c = mix(vec3f(.50, .45, .38), vec3f(.60, .56, .50), a.y);
-  c *= .85 + .3 * fbm(p * 2.1, 3);
+  var c = mix(vec3f(.40, .385, .355), vec3f(.52, .50, .46), a.y);
+  c *= mix(vec3f(1.), vec3f(1.06, 1., .9), h31(floor(p * .035) + 2.));
+  c *= .82 + .32 * fbm(p * 2.1, 3);
   // weathering: rain streaks down the walls, damp darkening near the base, lichen
   let streak = fbm(vec3f(uv.x * 2.3, uv.y * .12, 3.), 3);
-  c *= mix(1., .58, ss(.45, .85, streak) * .9);
+  c *= mix(1., .5, ss(.42, .85, streak));
+  c *= .8 + .2 * ss(.25, .6, fbm(p * vec3f(.15, .04, .15) + 1., 3));
   c *= mix(.72, 1., ss(-2., 8., uv.y));
-  c = mix(c, vec3f(.36, .38, .22), ss(.62, .8, fbm(p * .4 + 5., 3)) * .5);
+  c = mix(c, vec3f(.27, .29, .2), ss(.62, .82, fbm(p * .4 + 5., 3)) * .3);
   c *= 1. - dark;
   let mort = ss(.0, .03, a.x);
   return vec4f(c * mix(.55, 1., mort), mort);
@@ -363,7 +422,7 @@ fn slate(p: vec3f, uv: vec2f) -> vec3f {
   return c;
 }
 // window: arched lancet with leaded lattice; returns rgb + emission flag
-fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f) -> vec4f {
+fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
   let x = uv.x * 2. - 1.; let y = uv.y;
   // pointed arch: two circles meeting at the top
   let ah = .72; var inside = abs(x) < .82 && y > .04 && y < ah;
@@ -375,11 +434,19 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f) -> vec4f {
   let dg = min(abs(fract(q.x + q.y) - .5), abs(fract(q.x - q.y) - .5));
   let fw = length(fwu * vec2f(10., 9.)) * .6 + 1e-4;
   let lead = (1. - ss(.04, .09 + fw, dg)) * (1. - ss(.15, .5, fw));
-  let mul = 1. - ss(.035, .06 + fw * .2, abs(x));
+  var mul = 1. - ss(.035, .06 + fw * .2, abs(x));
+  if (tr) {
+    // three lights under a traceried head: two mullions, cusped sub-arches, and a ring in the head
+    let fm = fwu.x * 2. + 1e-4;
+    let ml = 1. - ss(.04, .07 + fm, abs(abs(x) - .33));
+    let sub = abs(length(vec2f(abs(abs(x) - .33) - .33, (y - ah + .02) * 3.)) - .33);
+    let ring = abs(length(vec2f(x, (y - .87) * 3.4)) - .3);
+    mul = max(select(ml, 0., y > ah), max(1. - ss(.03, .06 + fm, sub) * select(0., 1., y > ah - .1), 1. - ss(.03, .07 + fm, ring)));
+  }
   var lit = select(0., 1., seed < .74) * fl;
   let warm = mix(vec3f(1., .42, .11), vec3f(1., .6, .25), h31(floor(p * .25) + 3.));
   let fk = .85 + .15 * sin(u.cam.w * (2. + seed * 5.) + seed * 40.) * sin(u.cam.w * 1.3 + seed * 13.);
-  var e = warm * (2.2 + 3. * h31(floor(p * .25) + 7.)) * fk * lit * (1. - max(lead, mul) * .9);
+  var e = warm * (2.2 + 3. * h31(floor(p * .25) + 7.)) * fk * lit * (1. - max(lead, mul) * .9) * u.env.y;
   let glass = vec3f(.05, .055, .07) * (1. - lead);
   return vec4f(glass + e, 1.);
 }
@@ -396,7 +463,31 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f) -> vec4f {
     n = normalize(n + (1. - s.a) * .25 * vec3f(0., select(-1., 1., a.w < .5), 0.));
     if (m == 5u) { al = vec3f(.56, .52, .46) * (.85 + .25 * fbm(p * 3., 3)); }
   } else if (m == 1u) { al = slate(p, uv); sp = .35; gl = 30.; }
-  else if (m == 2u || m == 10u) { let w = windowCol(p, uv, select(1., .0, m == 10u), fwu); al = select(w.rgb, vec3f(.04, .045, .06), w.a > .5); if (w.a > .5) { em = w.rgb; sp = .25; gl = 300.; } }
+  else if (m == 14u) {
+    // rose window: a deep moulded ring, twelve stone mullions ending in cusped arches, a hub with a quatrefoil;
+    // between them small panes of muted stained glass in lead, lit from inside
+    let c = uv * 2. - 1.; let r = length(c); let an = atan2(c.y, c.x) / TAU + .5;
+    let fr = length(fwu) * 2. + 1e-3;
+    let sec = fract(an * 12.); let sx = (sec - .5) * r * TAU / 12.;               // distance across a petal, in uv units
+    let mull = ss(.05 + fr, .03, abs(abs(sx) - TAU / 24. * r));                    // mullions on the petal edges
+    let cusp = ss(.045 + fr, .02, abs(length(vec2f(sx, r - .72)) - .17)) * ss(.5, .6, r);
+    let ringO = ss(.84, .86, r); let hub = ss(.25, .23, r) * (1. - ss(.04 + fr, .0, abs(length(vec2f(abs(c.x) - .07, abs(c.y) - .07)) - .07)));
+    let stoneT = max(max(max(mull * ss(.22, .26, r), cusp), ringO), hub);
+    // the glass: a small grid of panes, each a muted colour, mostly blue with ruby and amber
+    // panes laid out around the wheel: rings of wedges, coloured in rings so each petal reads as one design
+    let pa = an * 48.; let pr = r * 8.; let g = vec2f(floor(pa) % 4., floor(pr)); let hue = h21(g + 3.);
+    let gc = select(select(vec3f(.16, .26, .62), vec3f(.62, .14, .12), hue > .6), vec3f(.75, .55, .2), hue > .86) * (.75 + .5 * h21(vec2f(floor(pa), floor(pr)) + 9.));
+    let lead = 1. - ss(.06, .12 + fr * 6., min(abs(fract(pa) - .5) * r * 3.3, abs(fract(pr) - .5))) * .7;
+    let pet = 1. - .45 * ss(.0, TAU / 24. * r, abs(sx));
+    let ins = ss(.985, .96, r);
+    let st = stoneCol(p, uv * 7., 0.).rgb;
+    // the moulding falls into shadow toward the glass, so the window sits back in the wall
+    let rec = mix(1., .45, ss(.97, .86, r));
+    al = mix(st, st * rec * .8, stoneT) ; al = mix(al, vec3f(.03, .035, .045), ins * (1. - stoneT));
+    em = gc * lead * pet * 1.6 * ins * (1. - stoneT) * (.9 + .1 * sin(u.cam.w * 1.3 + hue * 30.)) * u.env.y;
+    if (r > .985) { al = st; }
+  }
+  else if (m == 2u || m == 10u || m == 15u) { let w = windowCol(p, uv, select(1., .0, m == 10u), fwu, m == 15u); al = select(w.rgb, vec3f(.04, .045, .06), w.a > .5); if (w.a > .5) { em = w.rgb; sp = .25; gl = 300.; } }
   else if (m == 3u) { let g = fbm(vec3f(uv.x * 9., uv.y * .4, 1.), 3); al = mix(vec3f(.12, .07, .04), vec3f(.24, .15, .08), g) * (.7 + .3 * ss(.0, .06, abs(fract(uv.x * 4.) - .5))); }
   else if (m == 4u) { let g = fbm(p * 1.3, 3); al = mix(vec3f(.12, .36, .30), vec3f(.20, .42, .36), g) * (.8 + .3 * fbm(vec3f(uv.x * 3., uv.y * .3, 2.), 2)); sp = .25; }
   else if (m == 6u) { al = vec3f(.06, .06, .065); sp = .6; gl = 60.; }
@@ -409,17 +500,17 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f) -> vec4f {
     let t = u.cam.w * .01; let h1 = abs(dot(c, vec2f(cos(t), -sin(t)))); let h2 = abs(dot(c, vec2f(cos(t * 12.), -sin(t * 12.))));
     let hand = max(ss(.05, .02, h1) * ss(.55, .5, r) * select(0., 1., dot(c, vec2f(sin(t), cos(t))) > 0.), ss(.035, .015, h2) * ss(.8, .75, r) * select(0., 1., dot(c, vec2f(sin(t * 12.), cos(t * 12.))) > 0.));
     al = mix(al, vec3f(.05), max(tick, hand)) * select(1., .2, r > .95);
-    em = al * vec3f(1., .8, .55) * 1.4;
+    em = al * vec3f(1., .8, .55) * 1.4 * u.env.y;
   }
   else if (m == 13u) {
     let a = ashlar(uv * vec2f(.8, 1.1) + vec2f(0., fbm(p * .3, 2) * .3), 1.4, .7);
     al = mix(vec3f(.22, .21, .19), vec3f(.33, .31, .28), a.y) * (.75 + .4 * fbm(p * 1.3, 3)) * mix(.5, 1., ss(.0, .06, a.x));
-    al = mix(al, vec3f(.24, .27, .14), ss(.55, .75, fbm(p * .25 + 9., 3)) * .6);
+    al = mix(al, vec3f(.2, .22, .14), ss(.58, .78, fbm(p * .25 + 9., 3)) * .35);
   }
   else if (m == 11u) { al = vec3f(.5, .38, .2) * (.6 + .4 * fbm(p * 4., 2)); } // thatch / straw
   else if (m == 12u) { al = vec3f(.3, .3, .28); sp = .2; } // paving
   let sh = shadowAt(p, n);
-  let ao = mix(.55, 1., ss(-1., 6., uv.y)) * select(1., .8, m == 1u);
+  let ao = select(mix(.55, 1., ss(-1., 6., uv.y)), 1., m == 14u) * select(1., .8, m == 1u);
   var c = lit(al, n, p, sh, ao, sp, gl) + em;
   clipW(p);
   return vec4f(aerial(c, p), 1.);
@@ -545,7 +636,19 @@ fn cloud(p: vec2f, o: i32) -> f32 {
   // the sun disk with limb darkening
   let sd = 1. - ss(.99996, .99999, mu);
   let disk = ss(.99990, .99993, mu);
-  c += u.sunc.rgb * disk * 160. * mix(.6, 1., sd);
+  let nt = u.env.x;
+  c += u.sunc.rgb * disk * 160. * mix(.6, 1., sd) * (1. - nt);
+  if (nt > 0. && rd.y > 0.) {
+    // stars: one per cell of a fine grid on the sky, twinkling; a faint band of the galaxy across it
+    let g = rd * 260.; let id = floor(g); let f = fract(g) - .5; let h = h31(id);
+    let st = ss(.9965, 1., h) * ss(.25, .05, length(f + (vec3f(h22(id.xy + id.z), fract(h * 17.)) - .5) * .5)) * (.6 + .4 * sin(u.cam.w * (3. + h * 9.) + h * 50.));
+    let band = ss(.35, 0., abs(dot(rd, normalize(vec3f(.3, .55, -.78))))) * fbm2(rd.xz / max(rd.y, .1) * 3., 3);
+    c += (vec3f(st * 3.) + vec3f(.5, .55, .7) * band * .04) * nt * ss(.02, .2, rd.y);
+    // the moon: a pale disk with darker seas
+    let md = ss(.99991, .99994, mu);
+    let ml = 1. - .35 * ss(.4, .7, fbm2(vec2f(dot(rd, u.rt.xyz), rd.y) * 900., 3));
+    c += vec3f(.9, .92, 1.) * md * ml * 7. * nt + vec3f(.5, .6, .8) * pow(max(mu, 0.), 300.) * .3 * nt;
+  }
   if (rd.y > 0.) {
     let t = (2200. - u.cam.y) / rd.y; let cp = u.cam.xz + rd.xz * t;
     let d = cloud(cp, ${CLOUDN});
@@ -614,7 +717,8 @@ const W_POST = W_FS + W_NOISE + /*wgsl*/`
 @group(0) @binding(1) var smp: sampler;
 @group(0) @binding(2) var blm: texture_2d<f32>;
 @group(0) @binding(3) var ray: texture_2d<f32>;
-@group(0) @binding(4) var<uniform> pp: vec4f; // exposure, out w, out h, time
+struct PP { a: vec4f, b: vec4f };
+@group(0) @binding(4) var<uniform> P: PP; // exposure, out w, out h, time; grade, night
 fn aces(x: vec3f) -> vec3f {
   let a = mat3x3f(.59719, .07600, .02840, .35458, .90834, .13383, .04823, .01566, .83777);
   let b = mat3x3f(1.60475, -.10208, -.00327, -.53108, 1.10813, -.07276, -.07367, -.00605, 1.07602);
@@ -622,6 +726,7 @@ fn aces(x: vec3f) -> vec3f {
   return clamp(b * r, vec3f(0.), vec3f(1.));
 }
 @fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
+  let pp = P.a;
   let uv = p.xy / pp.yz;
   var c = textureSampleLevel(src, smp, uv, 0.).rgb;
   c += textureSampleLevel(blm, smp, uv, 0.).rgb * .09;
@@ -629,7 +734,9 @@ fn aces(x: vec3f) -> vec3f {
   c *= pp.x;
   // warm dusk grade: lift the shadows toward violet, keep the highlights gold
   let l = dot(c, vec3f(.2126, .7152, .0722));
-  c = mix(c, c * vec3f(.92, .95, 1.12), ss(.25, 0., l) * .5);
+  c = mix(c, c * vec3f(.92, .95, 1.12), ss(.25, 0., l) * .5 * P.b.x);
+  // night: the eye loses colour in the dark, and the shadows go blue
+  c = mix(c, mix(vec3f(l), c, ss(.0, .5, l)) * vec3f(.85, .95, 1.2), P.b.y * .6);
   c = aces(c * 1.05);
   c = pow(c, vec3f(1. / 2.2));
   let v = uv - .5; c *= 1. - dot(v, v) * .55;

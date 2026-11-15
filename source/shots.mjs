@@ -2,6 +2,7 @@
 //   node shots.mjs poses [dir] [scale]      the six viewpoints as PNGs (scale 1 = 3456x2234, 0.5 = 1728x1117)
 //   node shots.mjs look x y z tx ty tz name [dir]   one custom view
 //   node shots.mjs fly [dir] [n]             n frames spread over the 60 s flight, plus bursts of consecutive frames
+//   node shots.mjs eval 'js expression'      evaluate in the page (e.g. dev.grid(...)) and print the result
 //   node shots.mjs bench [dir]               the 60 s benchmark flight at the target resolution floor, report as JSON
 import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -25,6 +26,7 @@ if (mode === 'release') { await page.waitForFunction(() => document.body.classNa
 try { await page.waitForFunction(() => window.dev && document.body.className === 'm', { timeout: 120000, polling: 250 }); }
 catch { console.log('did not load', await page.evaluate(() => document.getElementById('s').textContent), errs.join('\n')); await browser.close(); process.exit(1); }
 await page.evaluate(() => { dev.hide(); document.getElementById('i').textContent = ''; });
+if (process.env.TIME) await page.evaluate((t) => dev.time(t), +process.env.TIME);
 await new Promise((r) => setTimeout(r, 1500));
 const frames = (n) => page.evaluate((n) => new Promise((r) => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 const shot = async (file) => { await frames(8); await page.screenshot({ path: file, type: file.endsWith('.jpg') ? 'jpeg' : 'png', quality: file.endsWith('.jpg') ? 92 : undefined }); };
@@ -34,6 +36,8 @@ if (mode === 'poses') {
   const d = outDir(0), s = +(args[1] || 1); await setScale(s); await page.evaluate(() => dev.freeze(30));
   await frames(60);
   for (let i = 0; i < 6; i++) { await page.evaluate((i) => { dev.pose(i); dev.hide(); }, i); await frames(30); await shot(path.join(d, `pose${i + 1}.png`)); }
+} else if (mode === 'eval') {
+  console.log(await page.evaluate(args[0]));
 } else if (mode === 'look') {
   const d = outDir(7); await setScale(0.5); await page.evaluate(() => dev.freeze(30));
   await page.evaluate((a) => { dev.look(...a); dev.hide(); }, args.slice(0, 6).map(Number)); await frames(20); await shot(path.join(d, `${args[6] || 'look'}.png`));
@@ -46,10 +50,12 @@ if (mode === 'poses') {
   // GPU ms per pose with each pass left out in turn
   await setScale(0.5);
   const names = ['all', 'refl', 'castle', 'terrain', 'water', 'trees', 'sky'];
-  for (let i = 0; i < 6; i++) {
-    await page.evaluate((i) => dev.pose(i), i); const row = [];
+  // node shots.mjs prof [t1,t2,...]: profile at those flight times instead of the six poses
+  const at = args[0] ? args[0].split(',').map(Number) : [0, 1, 2, 3, 4, 5];
+  for (const i of at) {
+    await page.evaluate((i, fly) => { dev.freeze(fly ? i : 30); if (fly) dev.flyTo(i); else dev.pose(i); }, i, !!args[0]); const row = [];
     for (let k = 0; k < names.length; k++) { await page.evaluate((k) => dev.mask(k ? 1 << (k - 1) : 0), k); await frames(10); row.push((await page.evaluate(() => dev.gpu(30))).toFixed(1)); }
-    console.log(`pose${i + 1} ` + names.map((n, k) => `${n} ${row[k]}`).join('  '));
+    console.log((args[0] ? `t=${i} ` : `pose${i + 1} `) + names.map((n, k) => `${n} ${row[k]}`).join('  '));
   }
 } else if (mode === 'check') {
   console.log(JSON.stringify(await page.evaluate(() => dev.checkFly())));
