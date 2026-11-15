@@ -22,7 +22,8 @@
     if (flying) {
       const dtr = F[LAST] - last; last = F[LAST];
       F[FLT] += min(dtr / 1000, 0.1); flyAt();
-      if (bench) { if (nFrame < LOGN) logFrame[nFrame++] = dtr; if (F[GPU] > 0 && nGpu < LOGN) logGpu[nGpu++] = F[GPU]; }
+      // the first frames after starting are warm-up (caches, clocks) and are not logged
+      if (bench && F[FLT] > 0.15) { if (nFrame < LOGN) logFrame[nFrame++] = dtr; if (F[GPU] > 0 && nGpu < LOGN) logGpu[nGpu++] = F[GPU]; }
       if (F[FLT] >= FLYT) { if (bench) report(); stop(); }
     }
     draw();
@@ -52,6 +53,14 @@
     where: () => [F[CX], F[CY], F[CZ], F[YAW], F[PIT]],
     h: (x, z) => H(x, z),
     time: (i) => applyTime(i),
+    calm: () => { lifeCalm = true; },
+    // frame the first animal of a kind from a distance, from the side and a little above
+    animal: (k, d) => { lifeCalm = true; stop(); const i = LRUN[k][0] * 8, x = LI[i], y = LI[i + 1], z = LI[i + 2], a = LI[i + 3] + PI / 2; lookAt(x + cos(a) * d, y + d * 0.3 + 1, z + sin(a) * d, x, y + 0.9, z); },
+    trees: (x, z, r) => { const o = []; for (let i = 0; i < TW.n && o.length < 5; i++) { const a = TW.data[i * 8], b = TW.data[i * 8 + 2]; if (hypot(a - x, b - z) < r) o.push([a | 0, TW.data[i * 8 + 1] | 0, b | 0]); } return JSON.stringify(o); },
+    follow: () => { stop(); follow = true; },
+    life: () => JSON.stringify({ runs: LRUN, at: LRUN.map(([s0, n]) => n ? [LI[s0 * 8] | 0, LI[s0 * 8 + 1] | 0, LI[s0 * 8 + 2] | 0] : null) }),
+    season: (i) => applySeason(i),
+    weather: (i) => applyWeather(i),
     // a grid of terrain heights, rows along z: dev.grid(x0, x1, z0, z1, step)
     grid: (x0, x1, z0, z1, s) => { const r = []; for (let z = z0; z <= z1; z += s) { const row = []; for (let x = x0; x <= x1; x += s) row.push(H(x, z) | 0); r.push(z + ': ' + row.join(' ')); } return r.join('\n'); },
   };

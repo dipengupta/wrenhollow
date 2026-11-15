@@ -2,7 +2,8 @@
 // audio: a procedural highland dusk (no sample files)
 // ============================================================================
 // A fixed Web Audio graph, built on the first click / key / touch and driven by a 10 Hz timer, not the frame loop.
-// Layers: wind (louder and brighter with height and speed), lapping water near the loch, a distant bell, rooks.
+// Layers: wind (louder and brighter with height, speed and the weather), lapping water near the loch, rain, a distant
+// bell, rooks by day and an owl at night.
 let AC, OUT, muted = false;
 const VOL = 0.8;
 function mkSound(ac) {
@@ -22,9 +23,11 @@ function mkSound(ac) {
   const low = G(0.25, out); src(0.7, BQ('lowpass', 180, 0.7, low)); lfo(0.07, 0.1, low.gain);
   // the loch lapping: low-passed noise pulsed by slow waves, loud near the water
   const lap = G(0, out), lapP = G(0.5, lap); src(0.53, BQ('lowpass', 600, 1, lapP)); lfo(0.4, 0.45, lapP.gain); lfo(0.23, 0.25, lapP.gain);
+  // rain: bright hiss over a softer patter
+  const rain = G(0, out); src(2.3, BQ('highpass', 1400, 0.5, rain)); src(1.1, BQ('bandpass', 700, 0.8, G(0.5, rain)));
   // pooled voices
   const pool = (n, send, type) => Array.from({ length: n }, () => { const p = N(StereoPannerNode, {}, out, G(send, wet)), g = G(0, p); return { p, g, o: N(OscillatorNode, { type }, g) }; });
-  const bell = pool(6, 2.2), rook = pool(3, 0.6, 'sawtooth');
+  const bell = pool(6, 2.2), rook = pool(3, 0.6, 'sawtooth'), owl = pool(2, 1.2, 'sine');
   const play = (vs, t, f0, f1, dur, vol, att, pan = rr(-0.7, 0.7)) => {
     const v = vs.shift(), f = v.o.frequency, g = v.g.gain; vs.push(v);
     v.p.pan.setValueAtTime(pan, t);
@@ -39,15 +42,22 @@ function mkSound(ac) {
     let v = hypot(F[CX] - lx, F[CY] - ly, F[CZ] - lz) / dt; if (v > 150) v = 0;
     lt = now; lx = F[CX]; ly = F[CY]; lz = F[CZ];
     const alt = clamp((ly - H(lx, lz)) / 120, 0, 1);
-    wind.gain.setTargetAtTime(0.18 + 0.35 * alt + 0.3 * min(v / 70, 1), t, 0.5); windF.frequency.setTargetAtTime(380 + 500 * alt + v * 8, t, 0.5);
+    const w = WEATHER[weather], night = TOD[tod].night, snowy = SEASON[season].snow > 0.5;
+    wind.gain.setTargetAtTime((0.18 + 0.35 * alt + 0.3 * min(v / 70, 1)) * (0.6 + 0.8 * w.wind), t, 0.5);
+    rain.gain.setTargetAtTime(snowy ? 0 : w.precip * 0.35, t, 1); windF.frequency.setTargetAtTime(380 + 500 * alt + v * 8, t, 0.5);
     lap.gain.setTargetAtTime(0.5 * clamp(1 - ly / 25, 0, 1), t, 0.5);
     if (t > tB) { // a bell tolling three to five times, inharmonic partials
       for (let n = 3 + rnd() * 3 | 0, k = 0; k < n; k++) { const tt = t + k * 2.6; for (const [r, a] of [[0.5, 0.05], [1, 0.035], [1.19, 0.02], [1.5, 0.015], [2.0, 0.012], [2.74, 0.008]]) play(bell, tt, 196 * r, 196 * r * 0.998, 6, a * 0.8, 0.01, 0.3); }
       tB = t + rr(45, 80);
     }
-    if (t > tR) { // a rook calling twice
-      const f = rr(380, 520); for (let k = 0; k < 2; k++) play(rook, t + k * 0.32, f, f * 0.7, 0.22, 0.015, 0.02);
-      tR = t + rr(4, 14);
+    if (t > tR) {
+      if (night > 0.5) { // a tawny owl: a long hoot, a pause, then a wavering one
+        play(owl, t, 410, 380, 0.9, 0.02, 0.08); play(owl, t + 1.9, 400, 360, 0.3, 0.012, 0.04); play(owl, t + 2.4, 420, 370, 1.4, 0.018, 0.1);
+        tR = t + rr(12, 25);
+      } else { // a rook calling twice (they keep quiet in the rain)
+        if (w.precip < 0.5) { const f = rr(380, 520); for (let k = 0; k < 2; k++) play(rook, t + k * 0.32, f, f * 0.7, 0.22, 0.015, 0.02); }
+        tR = t + rr(4, 14);
+      }
     }
   };
 }

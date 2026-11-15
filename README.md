@@ -1,6 +1,6 @@
 # Wrenhollow
 
-**A Gothic highland castle that you can fly around, right in your browser, from dawn to moonlit night.**
+**A Gothic highland castle that you can fly around, right in your browser: any time of day, any season, any weather.**
 
 ### [▶ Fly it now](https://dipengupta.github.io/wrenhollow/)
 
@@ -18,7 +18,10 @@ existing franchise.
 | | |
 |---|---|
 | ![The fortress side above the boathouse](.github/screenshots/fortress.jpg) | ![The viaduct against the setting sun](.github/screenshots/viaduct.jpg) |
-| ![Up the ravine to the covered bridge](.github/screenshots/ravine.jpg) | ![Over the castle toward the village](.github/screenshots/aerial.jpg) |
+| ![Up the gorge to the covered bridge](.github/screenshots/ravine.jpg) | ![Over the castle toward the village](.github/screenshots/aerial.jpg) |
+| ![Moonrise over the castle](.github/screenshots/night.jpg) | ![A clear winter evening](.github/screenshots/winter.jpg) |
+| ![Rain over the viaduct](.github/screenshots/rain.jpg) | ![Snow falling on the crag](.github/screenshots/snowfall.jpg) |
+| ![Autumn over the village](.github/screenshots/autumn.jpg) | ![Fog on the loch](.github/screenshots/fog.jpg) |
 
 ## Try it
 
@@ -40,15 +43,24 @@ It needs a browser with **WebGPU**.
 | Menu | `Esc` |
 | Sound on / off | `M` |
 | Time of day | `T`, or **Time** in the menu |
+| Season | `Y`, or **Season** in the menu |
+| Weather | `R`, or **Weather** in the menu |
+| Follow the eagle | `G` (any movement key takes you back) |
+| Let it fly itself | **Watch** in the menu (any key or click stops it) |
 | Performance stats | `H` |
 | Detail level | **Low**, **Medium** or **High** in the menu (reloads the page) |
 
-### Times of day
+### Time, season and weather
 
-**Dawn**, **Morning**, **Afternoon**, **Golden hour**, **Dusk** and **Night** (moonlit). The choice is kept in the
-address, so a look can be shared: [`?time=night`](https://dipengupta.github.io/wrenhollow/?time=night),
-[`?time=dawn`](https://dipengupta.github.io/wrenhollow/?time=dawn),
-[`?time=dusk`](https://dipengupta.github.io/wrenhollow/?time=dusk).
+- **Time**: dawn, morning, afternoon, golden hour, dusk, and a moonlit night
+- **Season**: spring (fresh green, gorse in flower), summer (heather in bloom), autumn (golden birches, rust bracken,
+  falling leaves), winter (snow on the hills, roofs and pines, ice along the loch, bare birches)
+- **Weather**: clear, cloudy, rain (with rings on the loch) and fog; in winter the rain falls as snow
+
+The choices are kept in the address, so a look can be shared:
+[`?time=night&season=winter`](https://dipengupta.github.io/wrenhollow/?time=night&season=winter),
+[`?time=dawn&weather=fog`](https://dipengupta.github.io/wrenhollow/?time=dawn&weather=fog),
+[`?season=autumn&weather=rain`](https://dipengupta.github.io/wrenhollow/?season=autumn&weather=rain).
 
 The ground, the walls and the towers are solid. You can fly through the covered bridge and under its arches.
 
@@ -63,8 +75,11 @@ The ground, the walls and the towers are solid. You can fly through the covered 
   church, about 90,000 pines and birches, heather, bracken, rock faces, snow-capped mountains
 - **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
   night stars, a band of the galaxy and the moon with its path on the loch
-- **Life**: rooks circling the towers, chimney smoke, glowing motes along the shore
-- **Sound**: wind that rises with height and speed, lapping water, a distant bell, rooks
+- **Life**: herds of red deer that bolt when you fly too close, sheep on the village pastures, swans and ducks on
+  the loch, a golden eagle circling the crag, rooks by day, an owl and bats at night, fireflies on summer evenings,
+  lanterns along the viaduct, the bridge and the village lane, chimney smoke
+- **Sound**: wind that rises with height, speed and the weather, rain, lapping water, a distant bell, rooks by day
+  and an owl at night
 
 ## How it works
 
@@ -97,7 +112,8 @@ node shots.mjs bench   # runs the 60 s benchmark flight and prints frame and GPU
 | [`source/src/world.js`](source/src/world.js) | Trees and birds |
 | [`source/src/audio.js`](source/src/audio.js) | The soundscape |
 | [`source/src/quality.js`](source/src/quality.js) | Detail levels |
-| [`source/src/env.js`](source/src/env.js) | Times of day: light direction, colours, exposure, window glow |
+| [`source/src/env.js`](source/src/env.js) | Times of day, seasons and weather |
+| [`source/src/life.js`](source/src/life.js) | The animals: their meshes and how they behave |
 | [`source/src/math.js`](source/src/math.js) | Noise, random numbers, the terrain grid and the mesh builder |
 | [`source/template.html`](source/template.html) | The page: loading bar, menu and styles |
 | [`source/fonts/`](source/fonts) | The menu typeface (Cinzel, subset to Latin), inlined into the page at build time |

@@ -81,16 +81,19 @@ button {
 }
 #d:hover { color: var(--ink); background: linear-gradient(#fff1cf, var(--gold)); box-shadow: inset 0 0 0 1px var(--gold), 0 0 2.2em #e9a54a80; }
 #d:active { background: linear-gradient(var(--gold), #c98a3e); }
+#go { display: flex; align-items: center; gap: 1.6em; }
+#wt { padding: .4em 0; font-size: 1em; color: var(--dim); box-shadow: 0 1px var(--line); }
+#wt:hover { color: var(--pale); box-shadow: 0 1px var(--pale); }
 
 /* detail level: three words, the current one underlined */
 /* detail level and time of day: rows of words, the current one underlined */
-#q, #tm { display: flex; align-items: baseline; gap: 1.1em; font-size: .85em; }
-#q > span, #tm > span { flex: none; width: 3.6em; font: italic 400 1.2em var(--serif); color: var(--dim); }
+#q, #tm, #se, #we { display: flex; align-items: baseline; gap: 1.1em; font-size: .85em; }
+#q > span, #tm > span, #se > span, #we > span { flex: none; width: 3.6em; font: italic 400 1.2em var(--serif); color: var(--dim); }
 .o { display: flex; flex-wrap: wrap; gap: .45em 1.1em; }
-#q button, #tm button { padding: .2em 0; color: var(--dim); font-weight: 500; }
-#q button:hover, #tm button:hover { color: var(--pale); }
-#q .on, #tm .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
-#opts { display: grid; gap: .8em; }
+#q button, #tm button, #se button, #we button { padding: .2em 0; color: var(--dim); font-weight: 500; }
+#q button:hover, #tm button:hover, #se button:hover, #we button:hover { color: var(--pale); }
+#q .on, #tm .on, #se .on, #we .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
+#opts { display: grid; gap: .6em; }
 /* in the scene: the name of the time of day, shown for a moment when it changes */
 #n {
   position: absolute; left: 0; right: 0; bottom: 12%; margin: 0; text-align: center; pointer-events: none;
@@ -143,9 +146,11 @@ button {
   <div id=a>
     <div id=l><div id=p><i id=b></i></div><p id=s>Raising the castle…</p><p id=w hidden>Best experienced in Google Chrome</p></div>
     <div id=g>
-      <button id=d>Take flight</button>
+      <p id=go><button id=d>Take flight</button><button id=wt>Watch</button></p>
       <div id=opts>
         <p id=tm><span>Time</span><i class=o></i></p>
+        <p id=se><span>Season</span><i class=o></i></p>
+        <p id=we><span>Weather</span><i class=o></i></p>
         <p id=q><span>Detail</span><i class=o><button>Low</button><button>Medium</button><button>High</button></i></p>
       </div>
       <div id=k>
@@ -158,6 +163,9 @@ button {
         <p>
           <i><b>Esc</b></i>Menu
           <i><b>T</b></i>Time of day
+          <i><b>Y</b></i>Season
+          <i><b>R</b></i>Weather
+          <i><b>G</b></i>Eagle
           <i><b>M</b></i>Mute
           <i><b>H</b></i>Stats
         </p>

@@ -27,6 +27,9 @@ try { await page.waitForFunction(() => window.dev && document.body.className ===
 catch { console.log('did not load', await page.evaluate(() => document.getElementById('s').textContent), errs.join('\n')); await browser.close(); process.exit(1); }
 await page.evaluate(() => { dev.hide(); document.getElementById('i').textContent = ''; });
 if (process.env.TIME) await page.evaluate((t) => dev.time(t), +process.env.TIME);
+if (process.env.CALM) await page.evaluate(() => dev.calm());
+if (process.env.SEASON) await page.evaluate((t) => dev.season(t), +process.env.SEASON);
+if (process.env.WEATHER) await page.evaluate((t) => dev.weather(t), +process.env.WEATHER);
 await new Promise((r) => setTimeout(r, 1500));
 const frames = (n) => page.evaluate((n) => new Promise((r) => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 const shot = async (file) => { await frames(8); await page.screenshot({ path: file, type: file.endsWith('.jpg') ? 'jpeg' : 'png', quality: file.endsWith('.jpg') ? 92 : undefined }); };
@@ -36,6 +39,12 @@ if (mode === 'poses') {
   const d = outDir(0), s = +(args[1] || 1); await setScale(s); await page.evaluate(() => dev.freeze(30));
   await frames(60);
   for (let i = 0; i < 6; i++) { await page.evaluate((i) => { dev.pose(i); dev.hide(); }, i); await frames(30); await shot(path.join(d, `pose${i + 1}.png`)); }
+} else if (mode === 'follow') {
+  // ride with the eagle for a few seconds, then a frame
+  const d = outDir(0); await setScale(0.5); await page.evaluate(() => dev.follow()); await new Promise((r) => setTimeout(r, 6000)); await shot(path.join(d, `${args[1] || 'follow'}.png`));
+} else if (mode === 'animal') {
+  // node shots.mjs animal kind distance name [dir]
+  const d = outDir(3); await setScale(0.5); await page.evaluate((k, r) => dev.animal(k, r), +args[0], +args[1]); await frames(20); await shot(path.join(d, `${args[2] || 'animal'}.png`));
 } else if (mode === 'eval') {
   console.log(await page.evaluate(args[0]));
 } else if (mode === 'look') {
@@ -49,7 +58,7 @@ if (mode === 'poses') {
 } else if (mode === 'prof') {
   // GPU ms per pose with each pass left out in turn
   await setScale(0.5);
-  const names = ['all', 'refl', 'castle', 'terrain', 'water', 'trees', 'sky'];
+  const names = ['all', 'refl', 'castle', 'terrain', 'water', 'trees', 'sky', 'precip'];
   // node shots.mjs prof [t1,t2,...]: profile at those flight times instead of the six poses
   const at = args[0] ? args[0].split(',').map(Number) : [0, 1, 2, 3, 4, 5];
   for (const i of at) {

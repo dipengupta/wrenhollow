@@ -3,7 +3,7 @@
 // ============================================================================
 // Materials (vertex w): 0 ashlar, 1 slate, 2 lit window, 3 timber, 4 copper, 5 dressed trim, 6 lead/iron,
 // 7 plaster, 8 greenhouse glass, 9 clock face, 10 dark window, 11 thatch, 12 paving, 13 rubble, 14 rose window,
-// 15 traceried window
+// 15 traceried window, 16 lantern glass
 // Colliders: towers are vertical cylinders, everything else oriented boxes. The camera is kept out of both.
 const COLC = [], COLB = []; // [x, z, r, ytop] ; [cx, cz, ex, ez, half len, half wid, y0, y1]
 const OBJS = []; // [first index, index count, minx, miny, minz, maxx, maxy, maxz] per culling object
@@ -441,6 +441,23 @@ function buildCastle() {
     const A = [ax + ez * w, H(ax + ez * w, az - ex * w) + 0.12, az - ex * w], Bq = [bx + ez * w, H(bx + ez * w, bz - ex * w) + 0.12, bz - ex * w], Cq = [bx - ez * w, H(bx - ez * w, bz + ex * w) + 0.12, bz + ex * w], Dq = [ax - ez * w, H(ax - ez * w, az + ex * w) + 0.12, az + ex * w];
     m.quad(A, Bq, Cq, Dq, 12, 0, 0, L, 0, L, 2 * w, 0, 2 * w);
     const k = m.nv - 4; if (m.b[k * 24 + 13] < 0) for (let j = 0; j < 4; j++) for (let q = 0; q < 3; q++) m.b[(k + j) * 24 + 12 + q] *= -1;
+  }
+  end();
+  // lanterns, lit from dusk: on posts along the lane, on the viaduct parapets, at the bridge ends, the gate and the jetty
+  begin();
+  {
+    // each its own small object, so its bounds stay tight (trees and animals keep clear of object bounds)
+    const lantern = (x, z, y, post) => {
+      end(); begin();
+      if (post) box(x, z, 1, 0, 0.07, 0.07, y - post, y, 6, 6);
+      box(x, z, 1, 0, 0.22, 0.22, y, y + 0.55, 16, 6); spire(x, z, 0.32, y + 0.55, 0.3, 4, 6, PI / 4);
+    };
+    const P = (t) => [mix(170, 330, t) + 25 * sin(t * 7), mix(-380, -500, t) + 30 * cos(t * 5)];
+    for (let i = 1; i < 16; i++) { const [ax, az] = P(i / 16), [bx, bz] = P(i / 16 + 0.01), L = hypot(bx - ax, bz - az), s = i & 1 ? 1 : -1, x = ax - (bz - az) / L * 3.2 * s, z = az + (bx - ax) / L * 3.2 * s; lantern(x, z, H(x, z) + 2.4, 2.4); }
+    for (let z = -110; z > -320; z -= 30) for (const s of [-1, 1]) lantern(-30 + s * 3.4, z, T + 1.1, 0);
+    for (const x of [161, 243]) for (const s of [-1, 1]) lantern(x, -86 + s * 3.4, C + 2.2, 2.2);
+    for (const s of [-1, 1]) lantern(-30 + s * 4.5, -86, T + 3.2, 0);
+    lantern(-110 - 14 - 0.7 * 11, 156 + 14 - 0.71 * 11, 2.3, 1.5);
   }
   end();
   // the village church

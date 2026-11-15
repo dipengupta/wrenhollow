@@ -40,10 +40,12 @@ const sunColor = (d) => {
   for (let i = 0; i < 400; i++) { const s = (i + 0.5) * 500, x = d[0] * s, y = RE + 150 + d[1] * s, z = d[2] * s, h = hypot(x, y, z) - RE; r += exp(-h / 8000) * 500; m += exp(-h / 1400) * 500; o += max(0, 1 - abs(h - 25e3) / 15e3) * 500; }
   return [0, 1, 2].map((k) => [7.5, 6.8, 7.2][k] * exp(-(BR[k] * r + BM * m + BO[k] * o)) || 0);
 };
-const setLight = (t) => {
+// cloud takes the direct light and spreads it over the sky: the sun dims, the ambient grows and greys
+const setLight = (t, w = WEATHER[weather]) => {
   const l = hypot(...t.light); for (let k = 0; k < 3; k++) SUN[k] = t.light[k] / l;
-  const c = sunColor(SUN); for (let k = 0; k < 3; k++) { SUNC[k] = c[k] * t.scale * t.tint[k]; AMB[k] = t.amb[k]; }
-  EXPO = t.expo; RAYS = t.rays;
+  const c = sunColor(SUN), lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) * t.scale;
+  for (let k = 0; k < 3; k++) { SUNC[k] = c[k] * t.scale * t.tint[k] * w.sun; AMB[k] = t.amb[k] * (1 - 0.25 * w.cover) + lum * (1 - w.sun) * 0.26 * [0.95, 0.98, 1.05][k]; }
+  EXPO = t.expo * (1 + 0.3 * w.cover); RAYS = t.rays * w.sun;
 };
 setLight(TOD[tod]);
 
@@ -103,6 +105,9 @@ for (const [k, s] of [[P, AA], [R, 1]]) {
 }
 P.water = scenePipe(mWater, [], { strip: 1 });
 P.bird = scenePipe(mBird, [ibBirdL], {});
+P.precip = scenePipe(mod(W_PRECIP), [], { strip: 1, blend: PREM });
+{ const ml = mod(W_LIFE); P.life = scenePipe(ml, [vbMeshL, ibTreeL]); R.life = scenePipe(ml, [vbMeshL, ibTreeL], {}, 1); }
+const NPREC = 14000 >> LV;
 const S = { terr: shadowPipe(mTerr, []), solid: shadowPipe(mSolid, [vbMeshL]), tree: shadowPipe(mTree, [vbMeshL, ibTreeL]) };
 
 const bglBlit = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.FRAGMENT, texture: {} }, { binding: 1, visibility: SS.FRAGMENT, sampler: {} }] });
@@ -165,7 +170,7 @@ P.fly = scenePipe(mFx, [], { vs: 'vsFly', fs: 'fsFly', blend: ADD, strip: 1 });
 P.fall = scenePipe(mFx, [], { vs: 'vsFall', fs: 'fsFall', blend: PREM, strip: 1 });
 P.banner = scenePipe(mFx, [], { vs: 'vsBan', fs: 'fsBan' });
 P.boat = scenePipe(mFx, [], { vs: 'vsBoat', fs: 'fsBoat' });
-const NBAN = BANS.length / 4, NSMOKE = VSMOKE.length / 3 * 14, NFLY = 260 >> LV, NFALL = 5;
+const NBAN = BANS.length / 4, NSMOKE = VSMOKE.length / 3 * 14, NFLY = 420 >> LV, NFALL = 5;
 const NOBJ = OBJS.length, OB = new Float32Array(NOBJ * 8); OBJS.forEach((o, i) => OB.set(o, i * 8));
 
 await say('Planting the forest…', 0.7, 1200);
@@ -175,6 +180,16 @@ const vbTree = buf(new Uint8Array(TM.v, 0, TM.nv * 24), BU.VERTEX), ibTree = buf
 const TW = makeTrees();
 const ibTrees = buf(TW.data, BU.VERTEX);
 const BIRDS = makeBirds(), nBird = BIRDS.length / 8, ibBirds = buf(BIRDS, BU.VERTEX);
+// animals: meshes, the herds, and an instance buffer rewritten every frame from the simulation
+const LM = lifeMeshes(), vbLife = buf(new Float32Array(LM.m.v, 0, LM.m.nv * 6), BU.VERTEX), ibLife = buf(LM.m.ix.subarray(0, LM.m.ni), BU.INDEX);
+makeLife();
+const ibLifeI = device.createBuffer({ size: LIFEMAX * 32, usage: BU.VERTEX | BU.COPY_DST });
+function drawLife(r, pl) {
+  if (!LN) return;
+  r.setPipeline(pl); r.setVertexBuffer(0, vbLife); r.setVertexBuffer(1, ibLifeI); r.setIndexBuffer(ibLife, 'uint32');
+  const eagle = TOD[tod].night < 0.3 && WEATHER[weather].precip < 0.5;
+  for (let k = 0; k < LRUN.length; k++) { const [s0, n] = LRUN[k]; if (n && (k !== KIND.EAGLE || eagle)) r.drawIndexed(LM.runs[k][1], n, LM.runs[k][0], 0, s0); }
+}
 
 // terrain index buffer: for each level of detail a grid of (n+1)^2 vertices plus four skirts of n+1 (see W_TERR)
 const TIDX = [];
@@ -224,7 +239,10 @@ function lightUB() {
   const t = TOD[tod];
   for (const u of [UB, UBR, UBS]) {
     u[36] = SUN[0]; u[37] = SUN[1]; u[38] = SUN[2]; u[56] = SUNC[0]; u[57] = SUNC[1]; u[58] = SUNC[2]; u[60] = AMB[0]; u[61] = AMB[1]; u[62] = AMB[2];
-    u[64] = t.night; u[65] = t.glow; u[66] = 0; u[67] = t.grade;
+    const se = SEASON[season], w = WEATHER[weather];
+    u[64] = t.night; u[65] = t.glow * (1 + 0.6 * w.cover * (1 - t.night)); u[66] = w.cover; u[67] = t.grade * (1 - 0.6 * w.cover);
+    u[68] = se.snow; u[69] = se.phase; u[70] = w.wet * (1 - se.snow * 0.5); u[71] = w.fog;
+    u[72] = w.precip; u[73] = w.wind; u[74] = se.snow > 0.5 ? 1 : 0; u[75] = 0;
   }
 }
 bakeShadow();
@@ -233,6 +251,8 @@ function applyTime(i) {
   tod = (i + TOD.length) % TOD.length; try { localStorage.wrenhollowTime = tod; } catch {}
   setLight(TOD[tod]); bakeSky(); bakeShadow();
 }
+function applySeason(i) { season = (i + SEASON.length) % SEASON.length; try { localStorage.wrenhollowSeason = season; } catch {} setLight(TOD[tod]); lightUB(); }
+function applyWeather(i) { weather = (i + WEATHER.length) % WEATHER.length; try { localStorage.wrenhollowWeather = weather; } catch {} setLight(TOD[tod]); lightUB(); }
 
 
 // ---------------------------------------------------------------- render targets (rebuilt on resize)
@@ -355,7 +375,7 @@ function flyAt() {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false;
+let hud = false, watch = false, follow = false;
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
 const TANH = 0.62, NEAR = 0.15;
 const submitList = [null];
@@ -466,7 +486,7 @@ function render() {
   // the world mirrored in the loch (only drawn when the camera is near enough to the water to see it matter)
   let r = e.beginRenderPass(passRefl);
   r.setBindGroup(0, bgR);
-  if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); drawTrees(r, R.tree, true); r.setPipeline(R.sky); r.draw(3); }
+  if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); drawTrees(r, R.tree, true); drawLife(r, R.life); r.setPipeline(R.sky); r.draw(3); }
   r.end();
   camUB(UB, false);
   r = e.beginRenderPass(passScene);
@@ -475,13 +495,23 @@ function render() {
   if (!(DBG & 4)) drawTerrain(r, P.terr, P.far, false);
   if (!(DBG & 8) && wet) { r.setPipeline(P.water); r.draw(4); }
   if (!(DBG & 16)) drawTrees(r, P.tree, false);
+  drawLife(r, P.life);
   r.setPipeline(P.banner); r.draw(6 * 24, NBAN);
   r.setPipeline(P.boat); r.draw(30, 3);
-  r.setPipeline(P.bird); r.setVertexBuffer(0, ibBirds); r.draw(12, nBird);
+  // rooks by day, the eagle on dry days, the owl at night, bats from dusk (not in rain or winter)
+  { const nt = TOD[tod].night, wet = WEATHER[weather].precip > 0.5, cold = SEASON[season].snow > 0.5;
+    r.setPipeline(P.bird); r.setVertexBuffer(0, ibBirds);
+    if (nt < 0.5 && !wet) r.draw(18, NROOK);
+    if (nt > 0.5) r.draw(18, 1, 0, NROOK + 1);   // the owl (slot NROOK is unused: the eagle is drawn with the animals)
+    if (nt > 0.2 && !wet && !cold) r.draw(18, nBird - NROOK - 2, 0, NROOK + 2); }
   if (!(DBG & 32)) { r.setPipeline(P.sky); r.draw(3); }
   r.setPipeline(P.fall); r.draw(4, NFALL);
   r.setPipeline(P.smoke); r.draw(4, NSMOKE);
   r.setPipeline(P.fly); r.draw(4, NFLY);
+  if (!(DBG & 64)) {
+    if (WEATHER[weather].precip > 0) { r.setPipeline(P.precip); r.draw(4, NPREC); }
+    else if (SEASON[season].phase === 2) { r.setPipeline(P.precip); r.draw(4, NPREC >> 2); } // autumn: leaves falling
+  }
   r.end();
   r = e.beginRenderPass(passRays); r.setPipeline(pRays); r.setBindGroup(0, bgRays); r.draw(3); r.end();
   for (let i = 0; i < bloomPass.length; i++) {
@@ -535,7 +565,15 @@ function frame(now) {
     dynN = dynT = dynG = dynGN = 0; resize();
   }
   F[TIME] += dt;
-  {
+  if (watch) { F[FLT] = (F[FLT] + dt) % FLYT; flyAt(); }
+  else if (follow) {
+    // ride behind the eagle
+    eagleAt(F[TIME]); const ex = EG[0], ey = EG[1], ez = EG[2], fx = EG[3], fz = EG[5];
+    const k = 1 - exp(-dt * 2.5);
+    F[CX] += (ex - fx * 9 - F[CX]) * k; F[CY] += (ey + 3 - F[CY]) * k; F[CZ] += (ez - fz * 9 - F[CZ]) * k;
+    P6[0] = F[CX]; P6[1] = F[CY]; P6[2] = F[CZ]; P6[3] = ex + fx * 10; P6[4] = ey - 1.5; P6[5] = ez + fz * 10; aim();
+  }
+  else {
     if (tId >= 0) {
       const tr = 4 / (innerWidth < innerHeight ? innerWidth : innerHeight); let jx = (tx - tx0) * tr, jy = (ty - ty0) * tr;
       jx = jx > 1 ? 1 : jx < -1 ? -1 : jx; jy = jy > 1 ? 1 : jy < -1 ? -1 : jy;
@@ -552,6 +590,7 @@ function frame(now) {
     F[YAW] = yaw; F[PIT] = pitch; F[VX] = vx; F[VY] = vy; F[VZ] = vz; F[CX] = x; F[CY] = y; F[CZ] = z;
     collide();
   }
+  lifeTick(dt, F[CX], F[CY], F[CZ]); Q.writeBuffer(ibLifeI, 0, LI, 0, LN * 8);
   render();
   if (hud) {
     hN++; if (dtr > hMax) hMax = dtr; if (dtr < hMin) hMin = dtr; if (dtr > hPer * 1.5) { hLate++; hTot++; }
@@ -562,6 +601,8 @@ function frame(now) {
 
 // ---------------------------------------------------------------- input
 const key = (e, v) => {
+  // any movement takes the camera back from the tour or the eagle
+  if (v && /Key[WASDQE]|Arrow/.test(e.code)) watch = follow = false;
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
     case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
@@ -569,6 +610,9 @@ const key = (e, v) => {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
       else if (e.code === 'KeyT') setTime(tod + 1, true);
+      else if (e.code === 'KeyG') { follow = !follow && TOD[tod].night < 0.3 && WEATHER[weather].precip < 0.5; const n = $('n'); n.textContent = follow ? 'Following the eagle' : TOD[tod].night >= 0.3 || WEATHER[weather].precip >= 0.5 ? 'The eagle is not out' : ''; n.className = ''; void n.offsetWidth; n.className = 'on'; }
+      else if (e.code === 'KeyY') setSeason(season + 1, true);
+      else if (e.code === 'KeyR') setWeather(weather + 1, true);
       else if (e.code === 'Escape') ui(true);
       else if (e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
     }
@@ -607,22 +651,32 @@ const go = () => {
   if (!mob) capture();
 };
 bDive.onclick = go; $('o').onclick = () => ui(true);
-// time of day: one button per entry in TOD; the choice goes into the address too, so a look can be shared
-const bTime = $('tm').lastChild;
-for (let i = 0; i < TOD.length; i++) { const b = document.createElement('button'); b.textContent = TOD[i].name; b.onclick = () => setTime(i); bTime.append(b); }
-function setTime(i, say) {
-  applyTime(i);
-  bTime.querySelectorAll('button').forEach((b, k) => { b.className = k === tod ? 'on' : ''; });
-  try { const u = new URL(location.href); u.searchParams.set('time', TOD[tod].name.toLowerCase().replace(' ', '')); history.replaceState(null, '', u); } catch {}
-  if (say) { const n = $('n'); n.textContent = TOD[tod].name; n.className = ''; void n.offsetWidth; n.className = 'on'; }
-}
-bTime.querySelectorAll('button')[tod].className = 'on';
+// watch: the camera tours the castle on its own until you press a key or click
+$('wt').onclick = () => { sound(); watch = true; follow = false; F[FLT] = 0; ui(false); bDive.textContent = 'Resume'; };
+canvas.addEventListener('mousedown', () => { watch = false; });
+// time of day, season and weather: a row of buttons each; the choices go into the address too, so a look can be shared
+const rows = [];
+const row = (id, table, cur, apply, key, label = (i) => table[i].name) => {
+  const el = $(id).lastChild, bs = table.map((t, i) => { const b = document.createElement('button'); b.onclick = () => set(i); el.append(b); return b; });
+  const mark = () => bs.forEach((b, k) => { b.textContent = label(k); b.className = k === cur() ? 'on' : ''; });
+  const set = (i, say) => {
+    apply(i); for (const r of rows) r();
+    try { const u = new URL(location.href); u.searchParams.set(key, label(cur()).toLowerCase().replace(' ', '')); history.replaceState(null, '', u); } catch {}
+    if (say) { const n = $('n'); n.textContent = label(cur()); n.className = ''; void n.offsetWidth; n.className = 'on'; }
+  };
+  rows.push(mark); mark();
+  return set;
+};
+const setTime = row('tm', TOD, () => tod, applyTime, 'time');
+const setSeason = row('se', SEASON, () => season, applySeason, 'season');
+const setWeather = row('we', WEATHER, () => weather, applyWeather, 'weather', weatherName);
 $('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('wrenhollow', 2 - i); location.reload(); }; });
 document.addEventListener('pointerlockchange', () => ui(!document.pointerLockElement));
 
-lookAt(...POSES[0]);
+// draw from every viewpoint once while loading, so the first sight of anything does not cost a frame later
 await say('Lighting the windows…', 1, 400);
-render(); await Q.onSubmittedWorkDone();
+for (let i = POSES.length - 1; i >= 0; i--) { lookAt(...POSES[i]); render(); }
+await Q.onSubmittedWorkDone();
 setTimeout(keep, 15e3, 'wrenhollowLoad', '');
 ui(true);
 requestAnimationFrame((t) => { F[LAST] = t; requestAnimationFrame(frame); });

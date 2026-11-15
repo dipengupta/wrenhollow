@@ -51,6 +51,7 @@ function meshBirch(m, lod) {
 
 // forest placement: bucketed into the terrain patch grid for culling
 const TCELLS = NPC, TCW = PATCH * CS;
+let NROOK = 0;
 function makeTrees() {
   rseed(7);
   const cells = Array.from({ length: TCELLS * TCELLS }, () => []);
@@ -100,5 +101,12 @@ function makeBirds() {
   const a = [];
   const flocks = [[40, 150, 10, 70], [-80, 120, 40, 50], [120, 110, -60, 40], [-30, 90, -200, 60]];
   for (const [x, y, z, r] of flocks) for (let i = 0; i < 28; i++) a.push(x + rr(-8, 8), y + rr(-10, 10), z + rr(-8, 8), r * rr(.6, 1.2), rnd() * TAU, rr(.12, .22) * (rnd() < .5 ? -1 : 1), rnd(), rr(.8, 1.2));
+  NROOK = a.length / 8;
+  // the eagle: wide, slow circles high over the crag (size > 2: it glides)
+  a.push(10, 235, 10, 170, 0, 0.065, 0.3, 3.2);
+  // the owl at night: lower, around the towers
+  a.push(-20, 128, 0, 70, 2, -0.16, 0.7, 1.7);
+  // bats at dusk and night (size < 0.5: they flit)
+  for (let i = 0; i < 24; i++) a.push(rr(-60, 60), rr(90, 120), rr(-40, 60), rr(15, 40), rnd() * TAU, rr(0.5, 0.9) * (rnd() < .5 ? -1 : 1), rnd(), rr(0.3, 0.4));
   return new Float32Array(a);
 }

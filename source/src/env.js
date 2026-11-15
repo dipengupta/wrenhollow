@@ -20,3 +20,28 @@ let tod = (() => {
   let s; try { s = +localStorage.wrenhollowTime; } catch {}
   return s >= 0 && s < TOD.length ? s : TODDEF;
 })();
+
+// seasons: snow cover on the ground, roofs and trees; phase: 0 spring, 1 summer, 2 autumn, 3 winter (foliage colours)
+const SEASON = [
+  { name: 'Spring', snow: 0, phase: 0 },
+  { name: 'Summer', snow: 0, phase: 1 },
+  { name: 'Autumn', snow: 0, phase: 2 },
+  { name: 'Winter', snow: 1, phase: 3 },
+];
+// weather: cloud cover, how much direct sun gets through, wet surfaces, extra fog, precipitation (rain, or snow in winter), wind
+const WEATHER = [
+  { name: 'Clear', cover: 0, sun: 1, wet: 0, fog: 0, precip: 0, wind: 0.3 },
+  { name: 'Cloudy', cover: 0.8, sun: 0.07, wet: 0, fog: 0.15, precip: 0, wind: 0.6 },
+  { name: 'Rain', cover: 0.95, sun: 0.02, wet: 1, fog: 0.45, precip: 1, wind: 1 },
+  { name: 'Fog', cover: 0.88, sun: 0.06, wet: 0.3, fog: 1, precip: 0, wind: 0.1 },
+];
+// the starting season and weather: ?season=winter&weather=rain, else the last ones picked, else summer and clear
+const pick = (key, table, store, def) => {
+  const q = (new URLSearchParams(location.search).get(key) || '').toLowerCase(), i = table.findIndex((t) => t.name.toLowerCase() === q || (key === 'weather' && q === 'snow' && t.name === 'Rain'));
+  if (i >= 0) return i;
+  let s; try { s = +localStorage[store]; } catch {}
+  return s >= 0 && s < table.length ? s : def;
+};
+let season = pick('season', SEASON, 'wrenhollowSeason', 1), weather = pick('weather', WEATHER, 'wrenhollowWeather', 0);
+// in winter the rain falls as snow
+const weatherName = (i) => (i === 2 && SEASON[season].snow > 0.5 ? 'Snow' : WEATHER[i].name);
