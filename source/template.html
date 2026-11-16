@@ -119,16 +119,15 @@ button {
   font: 400 1.6em Cinzel, var(--serif); letter-spacing: .12em; color: var(--pale); text-shadow: 0 0 1em #000, 0 0 .3em #000; opacity: 0;
 }
 #n.on { animation: toast 2.4s ease-out; }
-/* the name of a place, as you arrive there: letterspaced capitals between two fine rules, a line of italic below */
-#pt { position: absolute; left: 0; right: 0; top: 15%; display: grid; justify-items: center; gap: .35em; pointer-events: none; opacity: 0; text-align: center; }
-#pt h3 { margin: 0; display: flex; align-items: center; gap: .9em; font: 400 clamp(1.4em, 3.2vw, 2.6em) Cinzel, var(--serif); letter-spacing: .2em; color: var(--pale); text-shadow: 0 0 .6em #000, 0 0 .2em #000; }
-#pt h3::before, #pt h3::after { content: ''; width: clamp(1.5em, 6vw, 5em); height: 1px; background: linear-gradient(90deg, #0000, var(--gold)); }
-#pt h3::after { background: linear-gradient(90deg, var(--gold), #0000); }
-#pt p { margin: 0; font: italic 400 clamp(.9em, 1.5vw, 1.2em) var(--serif); color: var(--pale); text-shadow: 0 0 .6em #000, 0 0 .2em #000; opacity: .9; }
-#pt small { font: 600 .72em Cinzel, var(--serif); letter-spacing: .3em; color: var(--gold); text-shadow: 0 0 .5em #000; visibility: hidden; }
+/* the name of a place, as you arrive there: small, in the lower left corner, so the view stays the picture */
+#pt { position: absolute; left: 1.6em; bottom: 1.5em; display: grid; justify-items: start; gap: .2em; pointer-events: none; opacity: 0; text-align: left; }
+#pt h3 { margin: 0; display: flex; align-items: center; gap: .6em; font: 400 clamp(.95em, 1.35vw, 1.2em) Cinzel, var(--serif); letter-spacing: .16em; color: var(--pale); text-shadow: 0 0 .6em #000, 0 0 .2em #000; }
+#pt h3::before { content: ''; width: 1.6em; height: 1px; background: var(--gold); box-shadow: 0 0 .3em #000; }
+#pt p { margin: 0 0 0 2.6em; font: italic 400 clamp(.78em, 1vw, .9em) var(--serif); color: var(--pale); text-shadow: 0 0 .6em #000, 0 0 .2em #000; opacity: .85; }
+#pt small { margin-left: 3.6em; font: 600 .58em Cinzel, var(--serif); letter-spacing: .26em; color: var(--gold); text-shadow: 0 0 .5em #000; visibility: hidden; }
 #pt.new small { visibility: visible; }
 #pt.on { animation: title 5s ease-in-out; }
-@keyframes title { 0% { opacity: 0; transform: translateY(.3em); } 18%, 72% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@keyframes title { 0% { opacity: 0; transform: translateX(-.4em); } 15%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @keyframes toast { 0% { opacity: 0; transform: translateY(.4em); } 15%, 60% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
 /* list of controls: key caps as small outlined tiles */

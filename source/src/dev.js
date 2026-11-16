@@ -55,6 +55,37 @@
     time: (i) => applyTime(i),
     calm: () => { lifeCalm = true; },
     titles: (on) => { titlesOff = !on; },
+    // flowing time from t seconds into the day (0 dawn, 120 morning, ... 600 night), at the given speed
+    flow: (t, speed = 1) => { if (!flowing) applyTime(FLOWI); DAYS = speed; DAY0 = t - F[TIME] * speed; blendTime(F[TIME]); setLight(); bakeSky(); bakeShadow(); },
+    cur: () => JSON.stringify({ ...CUR, sun: SUN.map((v) => +v.toFixed(3)), shI, slotK }),
+    bakeParts: async (n = 10) => {
+      const part = (k) => { const e = device.createCommandEncoder(); const r = e.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: tShadow.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } }); r.setBindGroup(0, bgS);
+        if (k === 0) { r.setPipeline(S.terr); r.setIndexBuffer(ibTerr, 'uint32'); for (let i = 0; i < NPC * NPC; i++) r.drawIndexed(TIDX[1][1], 1, TIDX[1][0], 0, i + 1024); }
+        if (k === 1) { r.setPipeline(S.solid); r.setVertexBuffer(0, vbCastle); r.setIndexBuffer(ibCastle, 'uint32'); r.drawIndexed(CM.ni); }
+        if (k === 2) { r.setPipeline(S.tree); r.setVertexBuffer(0, vbTree); r.setVertexBuffer(1, ibTrees); r.setIndexBuffer(ibTree, 'uint32'); for (let c = 0; c < TCELLS * TCELLS; c++) for (const kk of [0, 1]) { const a = TW.start[c * 2 + kk], m = TW.start[c * 2 + kk + 1] - a; if (m) r.drawIndexed(TR[kk ? 4 : 1][1], m, TR[kk ? 4 : 1][0], 0, a); } }
+        r.end(); Q.submit([e.finish()]); };
+      const out = {}; for (const k of [0, 1, 2]) { await Q.onSubmittedWorkDone(); const t0 = performance.now(); for (let i = 0; i < n; i++) part(k); await Q.onSubmittedWorkDone(); out[['terrain', 'castle', 'trees'][k]] = +((performance.now() - t0) / n).toFixed(2); }
+      await Q.onSubmittedWorkDone(); const t0 = performance.now(); for (let i = 0; i < n; i++) { const e = device.createCommandEncoder(); e.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: tShadow.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } }).end(); Q.submit([e.finish()]); } await Q.onSubmittedWorkDone(); out.clear = +((performance.now() - t0) / n).toFixed(2);
+      out.trees_n = TW.n; out.shadow = SHADOW; return JSON.stringify(out);
+    },
+    // GPU time of the shadow bake by part (terrain, castle, trees), and of the sky bake, from timestamp queries
+    bakeGPU: async (n = 8) => {
+      const qs = device.createQuerySet({ type: 'timestamp', count: 2 }), rb = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC }), mb = device.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+      const run = async (k) => {
+        const e = device.createCommandEncoder(), tw = { querySet: qs, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+        if (k === 3) { const r = e.beginRenderPass({ colorAttachments: [colorAtt(tSky.createView(), true)], timestampWrites: tw }); r.setPipeline(pSkyBake); r.setBindGroup(0, bgSkyBake); r.draw(3); r.end(); }
+        else { const r = e.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: tShadow.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' }, timestampWrites: tw }); r.setBindGroup(0, bgS);
+          if (k === 0 || k === 4) { r.setPipeline(S.terr); r.setIndexBuffer(ibTerr, 'uint32'); for (let i = 0; i < NPC * NPC; i++) r.drawIndexed(TIDX[1][1], 1, TIDX[1][0], 0, i + 1024); }
+          if (k === 1 || k === 4) { r.setPipeline(S.solid); r.setVertexBuffer(0, vbCastle); r.setIndexBuffer(ibCastle, 'uint32'); r.drawIndexed(CM.ni); }
+          if (k === 2 || k === 4) { r.setPipeline(S.tree); r.setVertexBuffer(0, vbTree); r.setVertexBuffer(1, ibTrees); r.setIndexBuffer(ibTree, 'uint32'); for (let c = 0; c < TCELLS * TCELLS; c++) for (const kk of [0, 1]) { const a = TW.start[c * 2 + kk], m = TW.start[c * 2 + kk + 1] - a; if (m) r.drawIndexed(TR[kk ? 4 : 1][1], m, TR[kk ? 4 : 1][0], 0, a); } }
+          r.end(); }
+        e.resolveQuerySet(qs, 0, 2, rb, 0); e.copyBufferToBuffer(rb, 0, mb, 0, 16); Q.submit([e.finish()]);
+        await mb.mapAsync(GPUMapMode.READ); const t = new BigInt64Array(mb.getMappedRange().slice(0)); mb.unmap(); return Number(t[1] - t[0]) / 1e6;
+      };
+      const out = {}; for (const [k, name] of [[0, 'terrain'], [1, 'castle'], [2, 'trees'], [4, 'all'], [3, 'sky']]) { let best = 1e9, sum = 0; for (let i = 0; i < n; i++) { const v = await run(k); best = min(best, v); sum += v; } out[name] = [+best.toFixed(2), +(sum / n).toFixed(2)]; }
+      bakeShadow(); bakeSky(); return JSON.stringify(out);
+    },
+    bakeCost: async (n = 10) => { await Q.onSubmittedWorkDone(); const t0 = performance.now(); for (let i = 0; i < n; i++) bakeShadow(); await Q.onSubmittedWorkDone(); const t1 = performance.now(); for (let i = 0; i < n; i++) bakeSky(); await Q.onSubmittedWorkDone(); return JSON.stringify({ shadow: (t1 - t0) / n, sky: (performance.now() - t1) / n }); },
     found: () => JSON.stringify([...FOUND]),
     flash: (v, az, seed = 0.3) => { DEVFLASH = v; UB[78] = UBR[78] = az; UB[77] = UBR[77] = seed; },
     falls: () => JSON.stringify(FALLS.map((v) => +v.toFixed(1))),

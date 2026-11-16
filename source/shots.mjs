@@ -23,7 +23,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const flags = ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures', '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--allow-file-access-from-files'];
 const viewport = { width: 1728, height: 1117, deviceScaleFactor: 2 };
 let browser;
-if (mode === 'bench' && !show) {
+if ((mode === 'bench' || mode === 'bgeval') && !show) {
   const port = 9300 + (process.pid % 500), dir = mkdtempSync(path.join(os.tmpdir(), 'wrenhollow-bench-'));
   execFileSync('open', ['-g', '-n', '-a', 'Google Chrome', '--args', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--window-position=-4000,0', '--window-size=1760,1200', ...flags]);
   for (let i = 0; i < 100 && !browser; i++) { try { browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: viewport }); } catch { await new Promise((r) => setTimeout(r, 200)); } }
@@ -46,6 +46,7 @@ if (process.env.CALM) await page.evaluate(() => dev.calm());
 if (process.env.SEASON) await page.evaluate((t) => dev.season(t), +process.env.SEASON);
 if (process.env.WEATHER) await page.evaluate((t) => dev.weather(t), +process.env.WEATHER);
 if (process.env.PRE) await page.evaluate(process.env.PRE);
+if (process.env.FLOW) await page.evaluate((v) => dev.flow(...v), process.env.FLOW.split(',').map(Number));
 await new Promise((r) => setTimeout(r, 1500));
 const frames = (n) => page.evaluate((n) => new Promise((r) => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 const shot = async (file) => { await frames(8); await page.screenshot({ path: file, type: file.endsWith('.jpg') ? 'jpeg' : 'png', quality: file.endsWith('.jpg') ? 92 : undefined }); };
@@ -68,7 +69,7 @@ if (mode === 'poses') {
 } else if (mode === 'map') {
   // the in-game map, after flying to pose 1 (so the 'you are here' arrow has somewhere to be)
   const d = outDir(0); await setScale(0.5); await page.evaluate(() => { dev.pose(0); dev.map(); }); await frames(30); await shot(path.join(d, `${args[1] || 'map'}.png`));
-} else if (mode === 'eval') {
+} else if (mode === 'eval' || mode === 'bgeval') {
   console.log(await page.evaluate(args[0]));
 } else if (mode === 'look') {
   const d = outDir(7); await setScale(0.5); await page.evaluate((t) => dev.freeze(t), +(process.env.FREEZE || 30));

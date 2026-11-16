@@ -32,22 +32,46 @@ const buf = (data, usage) => { const b = device.createBuffer({ size: max(16, (da
 const tex = (w, h, format, usage, o = {}) => device.createTexture({ size: [w, h], format, usage, mipLevelCount: o.mips || 1, sampleCount: o.samples || 1 });
 
 // ---------------------------------------------------------------- light: the sun (or the moon), set from the time of day in env.js
-const SUN = [0, 1, 0], SUNC = [0, 0, 0], AMB = [0, 0, 0];
+const SUN = [0, 1, 0], SUNC = [0, 0, 0], AMB = [0, 0, 0], SCOL = [0, 0, 0];
+// the time of day being shown: a copy of one preset, or (Flowing) a blend of the two either side of the moment
+const CUR = { name: '', clock: 0, light: [0, 1, 0], scale: 1, tint: [1, 1, 1], amb: [0, 0, 0], sky: 1, expo: 1, glow: 0, night: 0, rays: 0, grade: 0 };
+const SEG = 120, DAYLEN = SEG * TOD.length;     // two minutes from each preset to the next
+let flowing = tod === FLOWI, DAY0 = 3 * SEG - 20, DAYS = 1;   // the day's clock: DAY0 + F[TIME] * DAYS seconds
+const cp3 = (o, a) => { o[0] = a[0]; o[1] = a[1]; o[2] = a[2]; };
+const mix3 = (o, a, b, f) => { o[0] = a[0] + (b[0] - a[0]) * f; o[1] = a[1] + (b[1] - a[1]) * f; o[2] = a[2] + (b[2] - a[2]) * f; };
+function blendTime(t) {
+  if (!flowing) {
+    const a = TOD[tod]; CUR.clock = a.clock; cp3(CUR.light, a.light); CUR.scale = a.scale; cp3(CUR.tint, a.tint); cp3(CUR.amb, a.amb);
+    CUR.sky = a.sky; CUR.expo = a.expo; CUR.glow = a.glow; CUR.night = a.night; CUR.rays = a.rays; CUR.grade = a.grade; return;
+  }
+  const u = ((DAY0 + t * DAYS) % DAYLEN + DAYLEN) % DAYLEN / SEG, i = floor(u), a = TOD[i], b = TOD[(i + 1) % TOD.length];
+  let f = u - i; f = f * f * (3 - 2 * f);   // linger a little at each preset
+  // from the setting sun to the moon (they are on opposite sides): fade the one out, then the other in
+  if (a.light[0] * b.light[0] + a.light[1] * b.light[1] + a.light[2] * b.light[2] < 0) {
+    const g = f < 0.5 ? a : b; cp3(CUR.light, g.light); cp3(CUR.tint, g.tint); CUR.scale = f < 0.5 ? a.scale * (1 - 2 * f) : b.scale * (2 * f - 1);
+  } else { mix3(CUR.light, a.light, b.light, f); mix3(CUR.tint, a.tint, b.tint, f); CUR.scale = a.scale + (b.scale - a.scale) * f; }
+  mix3(CUR.amb, a.amb, b.amb, f);
+  CUR.sky = a.sky + (b.sky - a.sky) * f; CUR.expo = a.expo * (b.expo / a.expo) ** f; CUR.glow = a.glow + (b.glow - a.glow) * f;
+  CUR.night = a.night + (b.night - a.night) * f; CUR.rays = a.rays + (b.rays - a.rays) * f; CUR.grade = a.grade + (b.grade - a.grade) * f;
+  const cb = b.clock < a.clock ? b.clock + 24 : b.clock; CUR.clock = (a.clock + (cb - a.clock) * (u - i)) % 24;
+}
 let EXPO = 1, RAYS = 0.55, FLASH = 0, DEVFLASH = -1, LSTRIKE = 0, LNEXT = 5, STRIKES = 0;
 // the sunlight that survives the atmosphere along direction d
-const sunColor = (d) => {
-  const RE = 6360e3, BR = [5.8e-6, 13.5e-6, 33.1e-6], BM = 3.2e-5 * 1.11, BO = [0.65e-6, 1.881e-6, 0.085e-6]; let r = 0, m = 0, o = 0;
-  for (let i = 0; i < 400; i++) { const s = (i + 0.5) * 500, x = d[0] * s, y = RE + 150 + d[1] * s, z = d[2] * s, h = hypot(x, y, z) - RE; r += exp(-h / 8000) * 500; m += exp(-h / 1400) * 500; o += max(0, 1 - abs(h - 25e3) / 15e3) * 500; }
-  return [0, 1, 2].map((k) => [7.5, 6.8, 7.2][k] * exp(-(BR[k] * r + BM * m + BO[k] * o)) || 0);
+const SBR = [5.8e-6, 13.5e-6, 33.1e-6], SBO = [0.65e-6, 1.881e-6, 0.085e-6], SK = [7.5, 6.8, 7.2], SAW = [0.95, 0.98, 1.05];
+const sunColor = (d, out) => {
+  const RE = 6360e3, BM = 3.2e-5 * 1.11; let r = 0, m = 0, o = 0;
+  for (let i = 0; i < 400; i++) { const s = (i + 0.5) * 500, x = d[0] * s, y = RE + 150 + d[1] * s, z = d[2] * s, h = sqrt(x * x + y * y + z * z) - RE; r += exp(-h / 8000) * 500; m += exp(-h / 1400) * 500; o += max(0, 1 - abs(h - 25e3) / 15e3) * 500; }
+  for (let k = 0; k < 3; k++) out[k] = SK[k] * exp(-(SBR[k] * r + BM * m + SBO[k] * o)) || 0;
+  return out;
 };
 // cloud takes the direct light and spreads it over the sky: the sun dims, the ambient grows and greys
-const setLight = (t, w = WEATHER[weather]) => {
-  const l = hypot(...t.light); for (let k = 0; k < 3; k++) SUN[k] = t.light[k] / l;
-  const c = sunColor(SUN), lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) * t.scale;
-  for (let k = 0; k < 3; k++) { SUNC[k] = c[k] * t.scale * t.tint[k] * w.sun; AMB[k] = t.amb[k] * (1 - 0.25 * w.cover) + lum * (1 - w.sun) * 0.26 * [0.95, 0.98, 1.05][k]; }
+const setLight = (t = CUR, w = WEATHER[weather]) => {
+  const l = sqrt(t.light[0] * t.light[0] + t.light[1] * t.light[1] + t.light[2] * t.light[2]); for (let k = 0; k < 3; k++) SUN[k] = t.light[k] / l;
+  const c = sunColor(SUN, SCOL), lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) * t.scale;
+  for (let k = 0; k < 3; k++) { SUNC[k] = c[k] * t.scale * t.tint[k] * w.sun; AMB[k] = t.amb[k] * (1 - 0.25 * w.cover) + lum * (1 - w.sun) * 0.26 * SAW[k]; }
   EXPO = t.expo * (1 + 0.3 * w.cover); RAYS = t.rays * w.sun;
 };
-setLight(TOD[tod]);
+blendTime(0); setLight();
 
 // ---------------------------------------------------------------- static resources
 const sRep = device.createSampler({ addressModeU: 'repeat', addressModeV: 'clamp-to-edge', magFilter: 'linear', minFilter: 'linear' });
@@ -73,7 +97,7 @@ const mkBG0 = (u, sh, refl) => device.createBindGroup({ layout: bgl0, entries: [
   { binding: 4, resource: sh.createView() }, { binding: 5, resource: tSky.createView() },
   { binding: 6, resource: { buffer: bHC } }, { binding: 7, resource: { buffer: bHF } }, { binding: 8, resource: refl }] });
 const pl0 = device.createPipelineLayout({ bindGroupLayouts: [bgl0] });
-const bgR = mkBG0(uboR, tShadow, tDummyC.createView()), bgS = mkBG0(uboS, tDummy, tDummyC.createView());
+let bgR = mkBG0(uboR, tShadow, tDummyC.createView()); const bgS = mkBG0(uboS, tDummy, tDummyC.createView());
 let bg0 = null;
 
 const A = (shaderLocation, offset, format) => ({ shaderLocation, offset, format });
@@ -145,12 +169,15 @@ addEventListener('pagehide', () => keep('wrenhollowLoad', ''));
 const pSkyBake = (() => { const ms = mod(W_SKYBAKE); return device.createRenderPipeline({ layout: 'auto', vertex: { module: ms, entryPoint: 'vs' }, fragment: { module: ms, entryPoint: 'fs', targets: [{ format: HDR }] } }); })();
 const uSkyBake = device.createBuffer({ size: 16, usage: BU.UNIFORM | BU.COPY_DST });
 const bgSkyBake = device.createBindGroup({ layout: pSkyBake.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uSkyBake } }] });
-function bakeSky() {
-  Q.writeBuffer(uSkyBake, 0, new Float32Array([...SUN, TOD[tod].sky]));
-  const e = device.createCommandEncoder(), r = e.beginRenderPass({ colorAttachments: [colorAtt(tSky.createView(), true)] });
-  r.setPipeline(pSkyBake); r.setBindGroup(0, bgSkyBake); r.draw(3); r.end();
-  Q.submit([e.finish()]);
+const SKYU = new Float32Array(4), SKYP = { colorAttachments: [colorAtt(tSky.createView(), true)] }, SKYL = { colorAttachments: [colorAtt(tSky.createView(), false)] };
+// half = 0: the whole sky; 1 or 2: only the upper or lower half (flowing time spreads the bake over two frames)
+function skyPass(e, half = 0) {
+  if (half < 2) { SKYU[0] = SUN[0]; SKYU[1] = SUN[1]; SKYU[2] = SUN[2]; SKYU[3] = CUR.sky; Q.writeBuffer(uSkyBake, 0, SKYU); }
+  const r = e.beginRenderPass(half === 2 ? SKYL : SKYP); r.setPipeline(pSkyBake); r.setBindGroup(0, bgSkyBake);
+  if (half) r.setScissorRect(0, half === 1 ? 0 : 128, 512, 128);
+  r.draw(3); r.end();
 }
+function bakeSky() { const e = device.createCommandEncoder(); skyPass(e); Q.submit([e.finish()]); }
 bakeSky();
 // per patch height range, for culling
 const PLO = new Float32Array(NPC * NPC), PHI = new Float32Array(NPC * NPC), FLO = new Float32Array(NPF * NPF), FHI = new Float32Array(NPF * NPF);
@@ -187,7 +214,7 @@ const ibLifeI = device.createBuffer({ size: LIFEMAX * 32, usage: BU.VERTEX | BU.
 function drawLife(r, pl) {
   if (!LN) return;
   r.setPipeline(pl); r.setVertexBuffer(0, vbLife); r.setVertexBuffer(1, ibLifeI); r.setIndexBuffer(ibLife, 'uint32');
-  const nt = TOD[tod].night, eagle = nt < 0.3 && WEATHER[weather].precip < 0.5;
+  const nt = CUR.night, eagle = nt < 0.3 && WEATHER[weather].precip < 0.5;
   for (let k = 0; k < LRUN.length; k++) {
     const [s0, n] = LRUN[k];
     if (!n || (k === KIND.EAGLE && !eagle) || (k === KIND.VILLAGER && nt > 0.5) || (k === KIND.BEARER && nt < 0.25)) continue;
@@ -210,45 +237,85 @@ const ibTerr = (() => {
 })();
 
 // ---------------------------------------------------------------- shadow map (static light, static world): baked again when the time changes
-function bakeShadow() {
-  const L = SUN, lr = [-L[2], 0, L[0]], ll = hypot(...lr); lr[0] /= ll; lr[2] /= ll;
-  const lu = [L[1] * lr[2] - L[2] * lr[1], L[2] * lr[0] - L[0] * lr[2], L[0] * lr[1] - L[1] * lr[0]];
-  const dot = (a, x, y, z) => a[0] * x + a[1] * y + a[2] * z;
-  let b = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9];
-  for (const x of [-300, 360]) for (const y of [-30, 200]) for (const z of [-540, 280]) {
-    const a = dot(lr, x, y, z), c = dot(lu, x, y, z), d = dot(L, x, y, z);
-    b = [min(b[0], a), max(b[1], a), min(b[2], c), max(b[3], c), min(b[4], d - 400), max(b[5], d + 400)];
+// the shadow map: drawn from the sun over the castle's surroundings. Two maps when the day is flowing: one is shown while
+// the other is redrawn a slice per frame (sky, terrain in halves, castle, trees in eighths), then they swap.
+const SHT = [tShadow, null], BGR = [null, null], BG0 = [null, null];
+let shI = 0, slotK = 0, swapNow = false, vRefl = null, held = 0, sliceNow = false;
+const NSL = 23;   // slices: sky in two halves, shadow setup and terrain in four, castle, trees in sixteen
+const shPass = (t, clear) => ({ colorAttachments: [], depthStencilAttachment: { view: t.createView(), depthClearValue: 1, depthLoadOp: clear ? 'clear' : 'load', depthStoreOp: 'store' } });
+const SHP = [[shPass(tShadow, true), shPass(tShadow, false)], null];
+// the trees split into sixteen slices of about the same number
+const TCH = new Uint32Array(17);
+{ const nc = TCELLS * TCELLS; let tot = 0; for (let c = 0; c < nc; c++) tot += TW.start[c * 2 + 2] - TW.start[c * 2];
+  let acc = 0, k = 1; for (let c = 0; c < nc && k < 16; c++) { acc += TW.start[c * 2 + 2] - TW.start[c * 2]; if (acc >= tot * k / 16) TCH[k++] = c + 1; } for (; k <= 16; k++) TCH[k] = nc; }
+function shadowSetup() {
+  const L = SUN, lr0 = -L[2], lr2 = L[0], ll = sqrt(lr0 * lr0 + lr2 * lr2), rx = lr0 / ll, rz = lr2 / ll;
+  const ux = L[1] * rz, uy = L[2] * rx - L[0] * rz, uz = -L[1] * rx;
+  let a0 = 1e9, a1 = -1e9, c0 = 1e9, c1 = -1e9, d0 = 1e9, d1 = -1e9;
+  for (let i = 0; i < 8; i++) {
+    const x = i & 1 ? 360 : -300, y = i & 2 ? 200 : -30, z = i & 4 ? 280 : -540, a = rx * x + rz * z, c = ux * x + uy * y + uz * z, d = L[0] * x + L[1] * y + L[2] * z;
+    a0 = min(a0, a); a1 = max(a1, a); c0 = min(c0, c); c1 = max(c1, c); d0 = min(d0, d - 400); d1 = max(d1, d + 400);
   }
-  const sx = 2 / (b[1] - b[0]), cx = (b[0] + b[1]) / 2, sy = 2 / (b[3] - b[2]), cy = (b[2] + b[3]) / 2, dz = b[5] - b[4], m = UBS;
-  m[0] = lr[0] * sx; m[4] = lr[1] * sx; m[8] = lr[2] * sx; m[12] = -cx * sx;
-  m[1] = lu[0] * sy; m[5] = lu[1] * sy; m[9] = lu[2] * sy; m[13] = -cy * sy;
-  m[2] = -L[0] / dz; m[6] = -L[1] / dz; m[10] = -L[2] / dz; m[14] = b[5] / dz;
+  const sx = 2 / (a1 - a0), cx = (a0 + a1) / 2, sy = 2 / (c1 - c0), cy = (c0 + c1) / 2, dz = d1 - d0, m = UBS;
+  m[0] = rx * sx; m[4] = 0; m[8] = rz * sx; m[12] = -cx * sx;
+  m[1] = ux * sy; m[5] = uy * sy; m[9] = uz * sy; m[13] = -cy * sy;
+  m[2] = -L[0] / dz; m[6] = -L[1] / dz; m[10] = -L[2] / dz; m[14] = d1 / dz;
   m[3] = 0; m[7] = 0; m[11] = 0; m[15] = 1;
-  for (let i = 0; i < 16; i++) UBS[16 + i] = UB[16 + i] = UBR[16 + i] = m[i];
-  lightUB();
-  UBR[39] = 1; UBS[32] = 0; UBS[33] = 300; UBS[34] = 0;
+  for (let i = 0; i < 16; i++) UBS[16 + i] = m[i];
+  UBS[32] = 0; UBS[33] = 300; UBS[34] = 0;
   Q.writeBuffer(uboS, 0, UBS);
-  const e = device.createCommandEncoder();
-  const r = e.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: tShadow.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } });
-  r.setBindGroup(0, bgS);
-  r.setPipeline(S.terr); r.setIndexBuffer(ibTerr, 'uint32'); for (let i = 0; i < NPC * NPC; i++) r.drawIndexed(TIDX[1][1], 1, TIDX[1][0], 0, i + 1024);
-  r.setPipeline(S.solid); r.setVertexBuffer(0, vbCastle); r.setIndexBuffer(ibCastle, 'uint32'); r.drawIndexed(CM.ni);
+}
+const shadowShown = () => { for (let i = 0; i < 16; i++) UB[16 + i] = UBR[16 + i] = UBS[16 + i]; UBR[39] = 1; };
+function shTerr(r, i0, i1) { r.setPipeline(S.terr); r.setIndexBuffer(ibTerr, 'uint32'); for (let i = i0; i < i1; i++) r.drawIndexed(TIDX[1][1], 1, TIDX[1][0], 0, i + 1024); }
+function shCastle(r) { r.setPipeline(S.solid); r.setVertexBuffer(0, vbCastle); r.setIndexBuffer(ibCastle, 'uint32'); r.drawIndexed(CM.ni); }
+function shTrees(r, c0, c1) {
   r.setPipeline(S.tree); r.setVertexBuffer(0, vbTree); r.setVertexBuffer(1, ibTrees); r.setIndexBuffer(ibTree, 'uint32');
-  for (let c = 0; c < TCELLS * TCELLS; c++) for (const k of [0, 1]) { const a = TW.start[c * 2 + k], n = TW.start[c * 2 + k + 1] - a; if (n) r.drawIndexed(TR[k ? 4 : 1][1], n, TR[k ? 4 : 1][0], 0, a); }
+  for (let c = c0; c < c1; c++) for (let k = 0; k < 2; k++) { const a = TW.start[c * 2 + k], n = TW.start[c * 2 + k + 1] - a; if (n) r.drawIndexed(TR[k ? 4 : 1][1], n, TR[k ? 4 : 1][0], 0, a); }
+}
+function bakeShadow() {
+  lightUB(); shadowSetup(); shadowShown();
+  const e = device.createCommandEncoder(), r = e.beginRenderPass(SHP[shI][0]);
+  r.setBindGroup(0, bgS); shTerr(r, 0, NPC * NPC); shCastle(r); shTrees(r, 0, TCELLS * TCELLS); r.end();
+  Q.submit([e.finish()]); slotK = 0;
+}
+// the second map and its bind groups, made the first time the day flows
+function shadowB() {
+  if (SHT[1]) return;
+  SHT[1] = tex(SHADOW, SHADOW, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING); SHP[1] = [shPass(SHT[1], true), shPass(SHT[1], false)];
+  BGR[0] = bgR; BGR[1] = mkBG0(uboR, SHT[1], tDummyC.createView()); if (vRefl) BG0[1] = mkBG0(ubo, SHT[1], vRefl);
+}
+// one slice of the redraw, recorded into the frame's own encoder; after the last, the new map is shown
+function flowSlice(e) {
+  if (!sliceNow) return;
+  const k = slotK, o = shI ^ 1; slotK = (slotK + 1) % NSL;
+  if (k < 2) { skyPass(e, k + 1); return; }
+  if (k === 2) shadowSetup();
+  const r = e.beginRenderPass(SHP[o][k === 2 ? 0 : 1]); r.setBindGroup(0, bgS);
+  const q = NPC * NPC >> 2;
+  if (k < 6) shTerr(r, (k - 2) * q, k === 5 ? NPC * NPC : (k - 1) * q); else if (k === 6) shCastle(r); else shTrees(r, TCH[k - 7], TCH[k - 6]);
   r.end();
-  Q.submit([e.finish()]);
+  if (swapNow) { swapNow = false; shI ^= 1; bg0 = BG0[shI]; bgR = BGR[shI]; }
+}
+// before the frame's uniforms go up: the blended light, and on the frame that finishes a map, its matrix
+function flowPre() {
+  blendTime(F[TIME]); setLight(); lightUB(false);
+  // a heavy frame (the GPU time measured a few frames back) waits; the slice goes in a lighter one, or after half a second
+  sliceNow = !(F[GPU] > 12.5 && held < 30); held = sliceNow ? 0 : held + 1;
+  if (sliceNow && slotK === NSL - 1) { shadowShown(); swapNow = true; }
 }
 // the light and the look of the time of day into all three uniform arrays
-function lightUB() {
-  const t = TOD[tod];
-  for (const u of [UB, UBR, UBS]) {
+const UBALL = [UB, UBR, UBS];
+function lightUB(lamps = true) {
+  const t = CUR;
+  for (let j = 0; j < 3; j++) {
+    const u = UBALL[j];
     u[36] = SUN[0]; u[37] = SUN[1]; u[38] = SUN[2]; u[56] = SUNC[0]; u[57] = SUNC[1]; u[58] = SUNC[2]; u[60] = AMB[0]; u[61] = AMB[1]; u[62] = AMB[2];
     const se = SEASON[season], w = WEATHER[weather];
     u[64] = t.night; u[65] = t.glow * (1 + 0.6 * w.cover * (1 - t.night)); u[66] = w.cover; u[67] = t.grade * (1 - 0.6 * w.cover);
     u[68] = se.snow; u[69] = se.phase; u[70] = w.wet * (1 - se.snow * 0.5); u[71] = w.fog;
-    u[72] = w.precip; u[73] = w.wind; u[74] = se.snow > 0.5 ? 1 : 0; u[75] = t.clock;
+    u[72] = w.precip; u[73] = w.wind; u[74] = se.snow > 0.5 ? 1 : 0; u[75] = t.clock - (flowing ? F[TIME] / 3600 : 0);   // the clock adds the running time itself
     // lanterns: a box around each group (so most pixels skip them), then up to 16 lights per group
-    for (let g = 0; g < 3; g++) {
+    if (lamps) for (let g = 0; g < 3; g++) {
       let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y0 = 1e9, y1 = -1e9, k = 0;
       for (let i = 0; i < LAMPS.length; i += 4) if (LAMPS[i + 3] === g && k < 16) {
         const o = 112 + (g * 16 + k++) * 4; u[o] = LAMPS[i]; u[o + 1] = LAMPS[i + 1]; u[o + 2] = LAMPS[i + 2]; u[o + 3] = 1;
@@ -262,11 +329,16 @@ function lightUB() {
 bakeShadow();
 // switch the time of day: new light, sky and shadows; nothing else is rebuilt
 function applyTime(i) {
-  tod = (i + TOD.length) % TOD.length; try { localStorage.wrenhollowTime = tod; } catch {}
-  setLight(TOD[tod]); bakeSky(); bakeShadow();
+  const was = tod;
+  tod = (i + TIMES.length) % TIMES.length; try { localStorage.wrenhollowTime = tod; } catch {}
+  // turning Flowing on carries on from the time that was showing
+  if (tod === FLOWI && !flowing) { DAY0 = (was < FLOWI ? was : 3) * SEG - F[TIME] * DAYS; shadowB(); }
+  flowing = tod === FLOWI;
+  blendTime(F[TIME]); setLight(); bakeSky(); bakeShadow();
 }
-function applySeason(i) { season = (i + SEASON.length) % SEASON.length; try { localStorage.wrenhollowSeason = season; } catch {} setLight(TOD[tod]); lightUB(); }
-function applyWeather(i) { weather = (i + WEATHER.length) % WEATHER.length; try { localStorage.wrenhollowWeather = weather; } catch {} setLight(TOD[tod]); lightUB(); }
+function applySeason(i) { season = (i + SEASON.length) % SEASON.length; try { localStorage.wrenhollowSeason = season; } catch {} setLight(); lightUB(); }
+function applyWeather(i) { weather = (i + WEATHER.length) % WEATHER.length; try { localStorage.wrenhollowWeather = weather; } catch {} setLight(); lightUB(); }
+if (flowing) shadowB();
 
 
 // ---------------------------------------------------------------- render targets (rebuilt on resize)
@@ -296,7 +368,7 @@ function resize() {
   passRefl = { colorAttachments: [colorAtt(tRefl.createView(), true)], depthStencilAttachment: { view: tRDp.createView(), depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' } };
   passRays = { colorAttachments: [colorAtt(tRay.createView(), true)] };
   passPost = { colorAttachments: [{ view: null, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] };
-  bg0 = mkBG0(ubo, tShadow, tRefl.createView());
+  vRefl = tRefl.createView(); BG0[0] = mkBG0(ubo, SHT[0], vRefl); BG0[1] = SHT[1] ? mkBG0(ubo, SHT[1], vRefl) : null; bg0 = BG0[shI];
   bgRays = device.createBindGroup({ layout: pRays.getBindGroupLayout(0), entries: [{ binding: 0, resource: vRes }, { binding: 1, resource: sClamp }, { binding: 2, resource: { buffer: uboRays } }] });
   bgPost = device.createBindGroup({ layout: pPost.getBindGroupLayout(0), entries: [{ binding: 0, resource: vRes }, { binding: 1, resource: sClamp }, { binding: 2, resource: vBl[0] }, { binding: 3, resource: tRay.createView() }, { binding: 4, resource: { buffer: uboPost } }] });
   bloomPass = []; bloomBG = [];
@@ -492,6 +564,7 @@ function drawTrees(r, pl, refl) {
   }
 }
 function render() {
+  if (flowing) flowPre();
   // the lantern-bearers' lanterns: lamp group 3, rewritten every frame
   { let x0 = 1e9, z0 = 1e9, y0 = 1e9, x1 = -1e9, z1 = -1e9, y1 = -1e9;
     for (let k = 0; k < 6; k++) { const o = 112 + (48 + k) * 4; UB[o] = DL[k * 4]; UB[o + 1] = DL[k * 4 + 1]; UB[o + 2] = DL[k * 4 + 2]; UB[o + 3] = DL[k * 4 + 3];
@@ -513,7 +586,7 @@ function render() {
   { const sf = SUN[0] * F[FX] + SUN[1] * F[FY] + SUN[2] * F[FZ]; const asp = W / H2;
     RS[0] = 0.5 + 0.5 * (SUN[0] * F[RX] + SUN[2] * F[RZ]) / max(sf, 0.05) / (TANH * asp); RS[1] = 0.5 - 0.5 * (SUN[0] * F[UX] + SUN[1] * F[UY] + SUN[2] * F[UZ]) / max(sf, 0.05) / TANH;
     RS[2] = sf > 0 ? RAYS * sstep(0, 0.35, sf) : 0; RS[3] = asp; Q.writeBuffer(uboRays, 0, RS); }
-  PP[0] = EXPO * (1 + 0.55 * FLASH); PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; PP[4] = TOD[tod].grade; PP[5] = TOD[tod].night; Q.writeBuffer(uboPost, 0, PP);
+  PP[0] = EXPO * (1 + 0.55 * FLASH); PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; PP[4] = CUR.grade; PP[5] = CUR.night; Q.writeBuffer(uboPost, 0, PP);
 
   const e = device.createCommandEncoder();
   let slot = null;
@@ -526,6 +599,8 @@ function render() {
   // in rain and snow the reflection is blurred by ripples and haze: the trees are left out of it
   if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); if (!WEATHER[weather].precip) drawTrees(r, R.tree, true); drawLife(r, R.life); r.setPipeline(R.sky); r.draw(3); }
   r.end();
+  // flowing time: one slice of the next sky and shadow map
+  if (flowing) flowSlice(e);
   camUB(UB, false);
   r = e.beginRenderPass(passScene);
   r.setBindGroup(0, bg0);
@@ -536,7 +611,7 @@ function render() {
   drawLife(r, P.life);
   r.setPipeline(P.banner); r.draw(6 * 24, NBAN);
   // rooks by day, the eagle on dry days, the owl at night, bats from dusk (not in rain or winter)
-  { const nt = TOD[tod].night, wet = WEATHER[weather].precip > 0.5, cold = SEASON[season].snow > 0.5;
+  { const nt = CUR.night, wet = WEATHER[weather].precip > 0.5, cold = SEASON[season].snow > 0.5;
     r.setPipeline(P.bird); r.setVertexBuffer(0, ibBirds);
     if (nt < 0.5 && !wet) r.draw(18, NROOK);
     if (nt > 0.5) r.draw(18, 1, 0, NROOK + 1);   // the owl (slot NROOK is unused: the eagle is drawn with the animals)
@@ -650,7 +725,7 @@ const key = (e, v) => {
       if (e.code === 'KeyH') { hud = !hud; hTot = 0; hPer = 1e9; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
       else if (e.code === 'KeyT') setTime(tod + 1, true);
-      else if (e.code === 'KeyG') { follow = !follow && TOD[tod].night < 0.3 && WEATHER[weather].precip < 0.5; const n = $('n'); n.textContent = follow ? 'Following the eagle' : TOD[tod].night >= 0.3 || WEATHER[weather].precip >= 0.5 ? 'The eagle is not out' : ''; n.className = ''; void n.offsetWidth; n.className = 'on'; }
+      else if (e.code === 'KeyG') { follow = !follow && CUR.night < 0.3 && WEATHER[weather].precip < 0.5; const n = $('n'); n.textContent = follow ? 'Following the eagle' : TOD[tod].night >= 0.3 || WEATHER[weather].precip >= 0.5 ? 'The eagle is not out' : ''; n.className = ''; void n.offsetWidth; n.className = 'on'; }
       else if (e.code === 'KeyY') setSeason(season + 1, true);
       else if (e.code === 'KeyR') setWeather(weather + 1, true);
       else if (e.code === 'Escape') { if (mapOpen) closeMap(); else ui(true); }
@@ -764,7 +839,7 @@ const row = (id, table, cur, apply, key, label = (i) => table[i].name) => {
   rows.push(mark); mark();
   return set;
 };
-const setTime = row('tm', TOD, () => tod, applyTime, 'time');
+const setTime = row('tm', TIMES, () => tod, applyTime, 'time');
 const setSeason = row('se', SEASON, () => season, applySeason, 'season');
 const setWeather = row('we', WEATHER, () => weather, applyWeather, 'weather', weatherName);
 $('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('wrenhollow', 2 - i); location.reload(); }; });

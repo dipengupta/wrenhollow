@@ -46,7 +46,7 @@ function mkSound(ac) {
     let v = hypot(F[CX] - lx, F[CY] - ly, F[CZ] - lz) / dt; if (v > 150) v = 0;
     lt = now; lx = F[CX]; ly = F[CY]; lz = F[CZ];
     const alt = clamp((ly - H(lx, lz)) / 120, 0, 1);
-    const w = WEATHER[weather], night = TOD[tod].night, snowy = SEASON[season].snow > 0.5;
+    const w = WEATHER[weather], night = CUR.night, snowy = SEASON[season].snow > 0.5;
     wind.gain.setTargetAtTime((0.18 + 0.35 * alt + 0.3 * min(v / 70, 1)) * (0.6 + 0.8 * w.wind), t, 0.5);
     rain.gain.setTargetAtTime(snowy ? 0 : w.precip * 0.35, t, 1); windF.frequency.setTargetAtTime(380 + 500 * alt + v * 8, t, 0.5);
     lap.gain.setTargetAtTime(0.5 * clamp(1 - ly / 25, 0, 1), t, 0.5);
@@ -70,9 +70,10 @@ function mkSound(ac) {
       tC = t + rr(15, 35);
     }
     // the Bell Tower strikes the hour the clock shows: on the hour, and soon after the time of day is changed
-    const hour = floor(TOD[tod].clock + F[TIME] / 3600);
-    if (tod !== lastTod) { lastTod = tod; strikeAt = t + 2; }
-    if (lastHour >= 0 && hour !== lastHour) strikeAt = t;
+    // (when the day is flowing an hour passes in half a minute: it strikes only every third hour)
+    const hour = floor(CUR.clock + (flowing ? 0 : F[TIME] / 3600));
+    if (tod !== lastTod) { lastTod = tod; if (!flowing) strikeAt = t + 2; }
+    if (lastHour >= 0 && hour !== lastHour && (!flowing || hour % 3 === 0)) strikeAt = t;
     lastHour = hour;
     if (t >= strikeAt) {
       const n = (hour + 11) % 12 + 1;

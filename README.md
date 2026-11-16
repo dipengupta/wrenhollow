@@ -53,7 +53,8 @@ It needs a browser with **WebGPU**.
 
 ### Time, season and weather
 
-- **Time**: dawn, morning, afternoon, golden hour, dusk, and a moonlit night
+- **Time**: dawn, morning, afternoon, golden hour, dusk, and a moonlit night; or **Flowing**, where the day passes on
+  its own, about twelve minutes from dawn to dawn
 - **Season**: spring (fresh green, gorse in flower), summer (heather in bloom), autumn (golden birches, rust bracken,
   falling leaves), winter (snow on the hills, roofs and pines, ice along the loch, bare birches)
 - **Weather**: clear, cloudy, rain (with rings on the loch, lightning and thunder) and fog; in winter the rain falls
@@ -61,6 +62,7 @@ It needs a browser with **WebGPU**.
 
 The choices are kept in the address, so a look can be shared:
 [`?time=night&season=winter`](https://dipengupta.github.io/wrenhollow/?time=night&season=winter),
+[`?time=flowing`](https://dipengupta.github.io/wrenhollow/?time=flowing),
 [`?time=dawn&weather=fog`](https://dipengupta.github.io/wrenhollow/?time=dawn&weather=fog),
 [`?season=autumn&weather=rain`](https://dipengupta.github.io/wrenhollow/?season=autumn&weather=rain).
 

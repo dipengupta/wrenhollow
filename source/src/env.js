@@ -13,12 +13,14 @@ const TOD = [
   { name: 'Night', clock: 23.2, light: [0.78, 0.3, -0.55], scale: 0.04, tint: [0.7, 0.85, 1.25], amb: [0.018, 0.024, 0.05], sky: 0.035, expo: 3.4, glow: 1.1, night: 1, rays: 0, grade: 0.3 },
 ];
 const TODDEF = 3;
+// the choices in the menu: the six times, then Flowing (the day passes on its own, about twelve minutes from dawn to dawn)
+const TIMES = [...TOD, { name: 'Flowing' }], FLOWI = TOD.length;
 // the starting time: ?time=night in the address, else the last one picked, else golden hour
 let tod = (() => {
-  const q = new URLSearchParams(location.search).get('time'), i = TOD.findIndex((t) => t.name.toLowerCase().replace(' ', '') === (q || '').toLowerCase().replace(/[\s-]/g, ''));
+  const q = new URLSearchParams(location.search).get('time'), i = TIMES.findIndex((t) => t.name.toLowerCase().replace(' ', '') === (q || '').toLowerCase().replace(/[\s-]/g, ''));
   if (i >= 0) return i;
   let s; try { s = +localStorage.wrenhollowTime; } catch {}
-  return s >= 0 && s < TOD.length ? s : TODDEF;
+  return s >= 0 && s < TIMES.length ? s : TODDEF;
 })();
 
 // seasons: snow cover on the ground, roofs and trees; phase: 0 spring, 1 summer, 2 autumn, 3 winter (foliage colours)
