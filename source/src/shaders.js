@@ -204,6 +204,7 @@ fn skyL(d: vec3f) -> vec3f {
 const SNOWC = vec3f(.72, .74, .78);
 // aerial perspective: height fog lit by the sky in the same direction, plus the sun's forward glow, plus low mist
 fn aerial(c: vec3f, p: vec3f) -> vec3f {
+  if (u.fw.w > .5) { return mix(c, skyL(vec3f(0., .3, 1.)), .12); }
   let v = p - u.cam.xyz; let d = length(v); let rd = v / max(d, 1e-3);
   let fg = u.env2.w;
   let b = 1. / mix(260., 420., fg); let a = 1.6e-4 * (1. + 9. * fg); let oy = max(u.cam.y, -5.);
@@ -224,17 +225,14 @@ fn aerial(c: vec3f, p: vec3f) -> vec3f {
   return (c * T + ins * (1. - T)) * Tm + mc * (1. - Tm);
 }
 fn shadowAt(p: vec3f, n: vec3f) -> f32 {
+  if (u.fw.w > .5) { return 1.; }
   let q = u.sh * vec4f(p + n * .25 + u.sun.xyz * .1, 1.);
   let uv = q.xy * vec2f(.5, -.5) + .5;
   if (any(uv < vec2f(0.)) || any(uv > vec2f(1.)) || q.z > 1.) { return 1.; }
   let tx = 1. / f32(textureDimensions(tSh).x);
   if (LOW || u.sun.w > .5 || distance(p, u.cam.xyz) > 150.) { return textureSampleCompareLevel(tSh, sCmp, uv, q.z); }
-  var s = 0.;
-  s += textureSampleCompareLevel(tSh, sCmp, uv + vec2f(-.5, -1.5) * tx, q.z);
-  s += textureSampleCompareLevel(tSh, sCmp, uv + vec2f(1.5, -.5) * tx, q.z);
-  s += textureSampleCompareLevel(tSh, sCmp, uv + vec2f(.5, 1.5) * tx, q.z);
-  s += textureSampleCompareLevel(tSh, sCmp, uv + vec2f(-1.5, .5) * tx, q.z);
-  return s * .25;
+  // two filtered taps (each already a 2x2 comparison) across the diagonal
+  return (textureSampleCompareLevel(tSh, sCmp, uv + vec2f(-.75, -.75) * tx, q.z) + textureSampleCompareLevel(tSh, sCmp, uv + vec2f(.75, .75) * tx, q.z)) * .5;
 }
 // sun + sky + bounce, with a soft wrap for foliage (wr > 0)
 fn lit(al: vec3f, n: vec3f, p: vec3f, sh: f32, ao: f32, sp: f32, gl: f32) -> vec3f {
@@ -321,7 +319,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   var s = f; if (s < 0.) { s = fbm(p * vec3f(.25, .6, .25), select(2, 3, near)); }
   let st = vn2(vec2f((p.x + p.z) * .04, p.y * .9));
   var c = mix(vec3f(.14, .128, .112), vec3f(.25, .228, .2), s) * (.82 + .3 * st);
-  if (near) { c *= (.86 + .28 * vn(p * vec3f(.9, .25, .9))) * (.88 + .24 * vn(p * 3.1)); c *= 1. - .18 * ss(.9, .97, vn(vec3f(p.x * .35, p.y * .04, p.z * .35)) ) ; }
+  if (near) { c *= .86 + .28 * vn(p * vec3f(.9, .25, .9)); c *= 1. - .18 * ss(.9, .97, vn(vec3f(p.x * .35, p.y * .04, p.z * .35)) ) ; }
   c *= .9 + .18 * ss(.3, .7, vn2(vec2f((p.x - p.z) * .02, p.y * .35)));            // layers
   c *= 1. - .2 * ss(.55, .8, vn2(vec2f((p.x + .7 * p.z) * .25, p.y * .015)));       // rain stains
   c = mix(c, vec3f(.26, .28, .17), ss(.68, .8, vn2(p.xz * .2 + p.y * .13 + 3.)) * .35); // lichen
@@ -568,6 +566,12 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
     al = mix(al, vec3f(.2, .22, .14), ss(.58, .78, fbm(p * .25 + 9., 3)) * .35);
   }
   else if (m == 11u) { al = vec3f(.5, .38, .2) * (.6 + .4 * fbm(p * 4., 2)); } // thatch / straw
+  else if (m == 17u) {
+    // standing stone: weathered grey rock, crusts of pale lichen, darker where the rain runs
+    al = mix(vec3f(.17, .17, .165), vec3f(.29, .285, .27), fbm(p * vec3f(.7, .25, .7), 3)) * (.8 + .3 * fbm(p * 3.3, 2));
+    al = mix(al, vec3f(.4, .41, .3), ss(.58, .72, fbm(p * 1.1 + 3., 2)) * .5);
+    al *= 1. - .3 * ss(.5, .8, fbm(vec3f(p.x * 2., p.y * .2, p.z * 2.), 2));
+  }
   else if (m == 16u) { al = vec3f(.05); em = vec3f(1., .62, .26) * 22. * max(ss(.08, .45, u.env.x), .12 * ss(.5, 1., u.env.y)) * (.9 + .1 * sin(u.cam.w * 9. + p.x * 3.)); } // lantern
   else if (m == 12u) { al = vec3f(.3, .3, .28); sp = .2; } // paving
   // winter: snow on roofs, sills and wall tops; rain: darker, glossier stone and slate
@@ -669,6 +673,15 @@ fn waves(p: vec2f, t: f32, fade: f32) -> vec2f {
   var g = waves(p.xz, u.cam.w, fade) * (.6 + .7 * u.env3.y);
   g *= ss(0., 1.5, dep) * .7 + .3;
   var rip = fbm2(p.xz * .9 + u.cam.w * vec2f(.3, .2), 2) * .12 * fade;
+  // fish rising: now and then a ring spreads where one has taken a fly
+  var fishR = 0.;
+  { let q = p.xz / 22.; let cc = floor(q); let h = h22(cc + 17.);
+    if (h.x > .4) {
+      let per = 6. + h.y * 8.; let t = fract(u.cam.w / per + h.x * 3.);
+      if (t < .45) { let ctr = (cc + .2 + h.yx * .6) * 22.; let r = length(p.xz - ctr); let R = .3 + t * 10.;
+        let k = (1. - t / .45); fishR = (ss(.5, 0., abs(r - R)) + .6 * ss(.4, 0., abs(r - R * .55))) * k;
+        rip += sin((r - R) * 5.) * ss(1.4, 0., abs(r - R)) * k * .16 * fade; }
+    } }
   // rain: rings spreading from drops, one per cell, each at its own moment
   if (u.env3.x > 0. && u.env3.z < .5) {
     let q = p.xz * 1.6; let c = floor(q); let h = h22(c); let f = fract(q) - .5 - (h - .5) * .5;
@@ -681,6 +694,8 @@ fn waves(p: vec2f, t: f32, fade: f32) -> vec2f {
   let suv = i.pos.xy * u.scr.zw;
   let ruv = vec2f(suv.x, 1. - suv.y) + n.xz * vec2f(.6, .9) * .06 / (1. + dist * .02);
   var refl = textureSampleLevel(tRefl, sClamp, clamp(ruv, vec2f(.001), vec2f(.999)), 0.).rgb;
+  // far water (beyond what the reflection pass is drawn for) mirrors the sky
+  refl = mix(refl, skyL(reflect(-V, n)), ss(1400., 1750., dist));
   // peaty loch water: dark brown-green in the deep, the stony bed shows through in the shallows
   let L = u.sun.xyz;
   let deep = vec3f(.008, .012, .01) * (u.amb.rgb * 3. + u.sunc.rgb * .2);
@@ -691,6 +706,8 @@ fn waves(p: vec2f, t: f32, fade: f32) -> vec2f {
   // the sun's glitter path
   let Hh = normalize(L + V); let sp = pow(max(dot(n, Hh), 0.), mix(180., 1200., fade));
   col += u.sunc.rgb * sp * mix(4., 18., fade) * f * shadowAt(p, vec3f(0., 1., 0.));
+  // the crest of a fish's ring catches the light
+  col += (skyL(reflect(-V, vec3f(0., 1., 0.))) * .35 + u.sunc.rgb * .04) * fishR * fade;
   // foam where the water meets the shore
   let fo = ss(.55, .0, dep + .25 * sin(u.cam.w * .8 + p.x * .3 + p.z * .2)) * ss(.3, .7, fbm2(p.xz * 1.5 + u.cam.w * .1, 3));
   col = mix(col, vec3f(.8) * (u.sunc.rgb * .4 + u.amb.rgb), fo * .7);
@@ -730,7 +747,7 @@ fn cloud(p: vec2f, o: i32) -> f32 {
   // the sun disk with limb darkening
   let sd = 1. - ss(.99996, .99999, mu);
   let disk = ss(.99990, .99993, mu);
-  let nt = u.env.x;
+  let nt = u.env.x; var met = vec3f(0.);
   c += u.sunc.rgb * disk * 160. * mix(.6, 1., sd) * (1. - nt) * (1. - u.env.z);
   if (nt > 0. && rd.y > 0.) {
     // stars: one per cell of a fine grid on the sky, twinkling; a faint band of the galaxy across it
@@ -738,6 +755,28 @@ fn cloud(p: vec2f, o: i32) -> f32 {
     let st = ss(.9965, 1., h) * ss(.25, .05, length(f + (vec3f(h22(id.xy + id.z), fract(h * 17.)) - .5) * .5)) * (.6 + .4 * sin(u.cam.w * (3. + h * 9.) + h * 50.));
     let band = ss(.35, 0., abs(dot(rd, normalize(vec3f(.3, .55, -.78))))) * fbm2(rd.xz / max(rd.y, .1) * 3., 3);
     c += (vec3f(st * 3.) + vec3f(.5, .55, .7) * band * .04) * nt * ss(.02, .2, rd.y) * (1. - u.env.z);
+    // shooting stars: one every few seconds somewhere in the sky, a bright head and a fading trail
+    { let k = floor(u.cam.w / 6.5); let h = h22(vec2f(k, 3.7)); let ph = fract(u.cam.w / 6.5) / .11;
+      if (ph < 1. && h.x > .25) {
+        let az = h.y * TAU; let el = .45 + h.x * .5;
+        let a = vec3f(cos(el) * cos(az), sin(el), cos(el) * sin(az)); let dr = normalize(cross(a, vec3f(.3, 1., .2)));
+        // distance to the great circle through the start and the head, and how far along the arc we are
+        let hd = normalize(a + dr * ph * .55); let gn = normalize(cross(a, hd));
+        let arc = atan2(length(cross(a, hd)), dot(a, hd)); let at = atan2(dot(cross(a, rd), gn), dot(a, rd));
+        let tt = at / max(arc, 1e-4); let dd = abs(dot(rd, gn)) + max(-at, 0.) + max(at - arc, 0.);
+        met = vec3f(1., .95, .85) * ss(.003, .0, dd) * tt * (1. - ph * .7) * 14. * nt * (1. - u.env.z);
+      } }
+    // the northern lights, on clear winter nights: curtains low in the north, green below and violet above
+    let au = nt * u.env2.x * (1. - u.env.z);
+    if (au > .05) {
+      let az = atan2(rd.x, -rd.z); let x = az * 2.6 + u.cam.w * .02;
+      let base = .1 + .08 * vn2(vec2f(x * .9, 3.));
+      let fold = ss(.4, .75, fbm2(vec2f(x, u.cam.w * .015), 2));
+      let rays = .55 + .45 * vn2(vec2f(x * 14., u.cam.w * .2));
+      let v = rd.y - base;
+      let curtain = fold * rays * ss(-.015, .01, v) * exp(-max(v, 0.) * 5.) * ss(1.6, .3, abs(az));
+      c += mix(vec3f(.15, 1., .45), vec3f(.7, .25, .9), ss(.02, .2, v)) * curtain * au * .35;
+    }
     // the moon: a pale disk with darker seas
     let md = ss(.99991, .99994, mu);
     let ml = 1. - .35 * ss(.4, .7, fbm2(vec2f(dot(rd, u.rt.xyz), rd.y) * 900., 3));
@@ -757,6 +796,8 @@ fn cloud(p: vec2f, o: i32) -> f32 {
       c = mix(c, lc, a * .92);
     }
   }
+  // the shooting star burns above the cloud: drawn over it, only a little dimmed
+  c += met * .75;
   // fog veils the sky as well
   c = mix(c, skyL(normalize(vec3f(rd.x, .03, rd.z))), u.env2.w * .85 * ss(-.2, .6, 1. - rd.y));
   return vec4f(c, 1.);
@@ -1049,7 +1090,17 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
     let a = -graze * 1.05 + sin(u.cam.w * .7 + ia.x) * .06 * (1. - graze) - sin(ph * 2.) * .05 * min(walk, 1.);
     q = vec3f(piv + rz(q.xy - piv, a), q.z); n = vec3f(rz(n.xy, a), n.z);
   }
-  if (limb >= 6.) {
+  if (limb == 8. || limb == 9.) {
+    // oars: sweep about the rowlock, the blade lifting clear on the recovery
+    let sd = select(-1., 1., limb == 8.); let a = sin(ph) * .5 * sd;
+    let d = rz(vec2f(q.x - piv.x, q.z - piv.y), a); let rr2 = length(d);
+    q = vec3f(d.x + piv.x, q.y + max(cos(ph), 0.) * .12 * rr2, d.y + piv.y);
+    let nn = rz(n.xz, a); n = vec3f(nn.x, n.y, nn.y);
+  } else if (limb == 10.) {
+    // the rower leans back on the pull, forward on the recovery
+    let a = sin(ph) * .35;
+    q = vec3f(piv + rz(q.xy - piv, a), q.z); n = vec3f(rz(n.xy, a), n.z);
+  } else if (limb >= 6.) {
     // wings roll about the body's axis from the shoulder: a slight dihedral, beats when flapping (graze = flap depth)
     let sd = select(-1., 1., limb == 6.); let a = sd * (.1 + sin(ph * 6.) * graze * .7);
     let d = rz(vec2f(q.z - piv.x, q.y - piv.y), a); q = vec3f(q.x, d.y + piv.y, d.x + piv.x);
@@ -1085,6 +1136,10 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
     case 41u: { al = vec3f(.2, .13, .07) * (.75 + .3 * g) * (.8 + .2 * ss(.0, .05, abs(fract(i.ly * 7.) - .5))); }
     case 42u: { al = vec3f(.42, .3, .14) * (.85 + .3 * g); }
     case 43u: { al = vec3f(.3, .29, .27) * (.85 + .25 * g); }
+    case 44u: { al = vec3f(.08, .09, .1) * (.85 + .3 * g); }
+    case 45u: { al = vec3f(.55, .4, .32); }
+    case 46u: { al = mix(vec3f(.42, .44, .46), vec3f(.62, .63, .64), ss(1.1, 1.3, i.ly)) * (.85 + .25 * g); }
+    case 47u: { al = vec3f(.4, .33, .16); }
     default: { al = vec3f(.04, .18, .1); sp = .4; }
   }
   let sh = shadowAt(i.p, n);

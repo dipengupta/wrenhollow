@@ -82,8 +82,8 @@ button {
 #d:hover { color: var(--ink); background: linear-gradient(#fff1cf, var(--gold)); box-shadow: inset 0 0 0 1px var(--gold), 0 0 2.2em #e9a54a80; }
 #d:active { background: linear-gradient(var(--gold), #c98a3e); }
 #go { display: flex; align-items: center; gap: 1.6em; }
-#wt { padding: .4em 0; font-size: 1em; color: var(--dim); box-shadow: 0 1px var(--line); }
-#wt:hover { color: var(--pale); box-shadow: 0 1px var(--pale); }
+#wt, #mp { padding: .4em 0; font-size: 1em; color: var(--dim); box-shadow: 0 1px var(--line); }
+#wt:hover, #mp:hover { color: var(--pale); box-shadow: 0 1px var(--pale); }
 
 /* detail level: three words, the current one underlined */
 /* detail level and time of day: rows of words, the current one underlined */
@@ -94,6 +94,20 @@ button {
 #q button:hover, #tm button:hover, #se button:hover, #we button:hover { color: var(--pale); }
 #q .on, #tm .on, #se .on, #we .on { color: var(--gold); box-shadow: 0 1px var(--gold); pointer-events: none; }
 #opts { display: grid; gap: .6em; }
+/* the map: labels over the scene seen from high above */
+#map { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(closest-side, #0000 70%, #1a0f08d0 100%), radial-gradient(#0000 40%, #1a0f0866); }
+#map[hidden] { display: none; }
+#map h2 { position: absolute; top: 1.2em; left: 0; right: 0; margin: 0; text-align: center; font: 400 2.2em Cinzel, var(--serif); letter-spacing: .12em; color: var(--pale); text-shadow: 0 0 .5em #000; }
+#map h2 small { display: block; font: italic 400 .4em var(--serif); letter-spacing: .02em; color: var(--dim); }
+.pl {
+  position: absolute; display: flex; align-items: center; gap: .4em; translate: -.35em -50%; pointer-events: auto; white-space: nowrap;
+  font: 600 .9em Cinzel, var(--serif); letter-spacing: .06em; color: var(--pale); text-shadow: 0 0 .3em #000, 0 0 .8em #000;
+}
+.pl i { width: .55em; height: .55em; rotate: 45deg; background: var(--gold); box-shadow: 0 0 .5em #000; }
+.pl:hover { color: var(--gold); }
+.pl.l { flex-direction: row-reverse; translate: calc(-100% + .35em) -50%; }
+#map svg { position: absolute; inset: 0; stroke: #e9c27aa0; stroke-width: 1; fill: var(--gold); }
+#you { position: absolute; width: 0; height: 0; border: .55em solid #0000; border-bottom: 1.4em solid #ff5a3c; translate: -50% -70%; filter: drop-shadow(0 0 .3em #000); transform-origin: 50% 70%; }
 /* in the scene: the name of the time of day, shown for a moment when it changes */
 #n {
   position: absolute; left: 0; right: 0; bottom: 12%; margin: 0; text-align: center; pointer-events: none;
@@ -146,7 +160,7 @@ button {
   <div id=a>
     <div id=l><div id=p><i id=b></i></div><p id=s>Raising the castle…</p><p id=w hidden>Best experienced in Google Chrome</p></div>
     <div id=g>
-      <p id=go><button id=d>Take flight</button><button id=wt>Watch</button></p>
+      <p id=go><button id=d>Take flight</button><button id=wt>Watch</button><button id=mp>Map</button></p>
       <div id=opts>
         <p id=tm><span>Time</span><i class=o></i></p>
         <p id=se><span>Season</span><i class=o></i></p>
@@ -166,6 +180,7 @@ button {
           <i><b>Y</b></i>Season
           <i><b>R</b></i>Weather
           <i><b>G</b></i>Eagle
+          <i><b>N</b></i>Map
           <i><b>M</b></i>Mute
           <i><b>H</b></i>Stats
         </p>
@@ -176,6 +191,7 @@ button {
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>
+<div id=map hidden><svg width=100% height=100%></svg><h2>Wrenhollow<small>Click a place to fly there · N or Esc to go back</small></h2><span id=you></span></div>
 <p id=n></p>
 <script>
 /*SCRIPT*/

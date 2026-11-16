@@ -11,4 +11,4 @@ let SV = [], LV, bad;
 try { SV = (localStorage.wrenhollow || '').split(','); bad = localStorage.wrenhollowLoad; } catch {}
 LV = SV[0] ? +SV[0] : mob ? (mem > 7 ? 1 : 2) : mem <= 4 ? 2 : 0;
 if (bad && LV < 2) { SV = [++LV]; keep('wrenhollow', LV); }
-const THIN = 1 << LV, SHADOW = LV ? 2048 : 4096, AA = LV > 1 ? 1 : 4, REFL = LV > 1 ? 0.35 : 0.5, CLOUDN = LV > 1 ? 3 : 5;
+const THIN = 1 << LV, SHADOW = LV ? 2048 : 4096, AA = LV > 1 ? 1 : 4, REFL = LV > 1 ? 0.35 : 0.45, CLOUDN = LV > 1 ? 3 : 5;

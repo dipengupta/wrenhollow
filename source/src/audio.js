@@ -34,7 +34,7 @@ function mkSound(ac) {
     f.setValueAtTime(f0, t); f.exponentialRampToValueAtTime(f1, t + dur);
     g.setValueAtTime(0, t); g.linearRampToValueAtTime(vol, t + att); g.setTargetAtTime(0, t + att, (dur - att) / 5);
   };
-  let lt = ac.currentTime, tB = lt + 6, tR = lt + 3, lx = F[CX], ly = F[CY], lz = F[CZ];
+  let lt = ac.currentTime, tR = lt + 3, lx = F[CX], ly = F[CY], lz = F[CZ], lastHour = -1, lastTod = tod, strikeAt = lt + 4;
   out.gain.setTargetAtTime(VOL, lt, 1.5);
   return () => {
     const now = ac.currentTime, t = now + 0.05, dt = now - lt;
@@ -46,9 +46,15 @@ function mkSound(ac) {
     wind.gain.setTargetAtTime((0.18 + 0.35 * alt + 0.3 * min(v / 70, 1)) * (0.6 + 0.8 * w.wind), t, 0.5);
     rain.gain.setTargetAtTime(snowy ? 0 : w.precip * 0.35, t, 1); windF.frequency.setTargetAtTime(380 + 500 * alt + v * 8, t, 0.5);
     lap.gain.setTargetAtTime(0.5 * clamp(1 - ly / 25, 0, 1), t, 0.5);
-    if (t > tB) { // a bell tolling three to five times, inharmonic partials
-      for (let n = 3 + rnd() * 3 | 0, k = 0; k < n; k++) { const tt = t + k * 2.6; for (const [r, a] of [[0.5, 0.05], [1, 0.035], [1.19, 0.02], [1.5, 0.015], [2.0, 0.012], [2.74, 0.008]]) play(bell, tt, 196 * r, 196 * r * 0.998, 6, a * 0.8, 0.01, 0.3); }
-      tB = t + rr(45, 80);
+    // the Bell Tower strikes the hour the clock shows: on the hour, and soon after the time of day is changed
+    const hour = floor(TOD[tod].clock + F[TIME] / 3600);
+    if (tod !== lastTod) { lastTod = tod; strikeAt = t + 2; }
+    if (lastHour >= 0 && hour !== lastHour) strikeAt = t;
+    lastHour = hour;
+    if (t >= strikeAt) {
+      const n = (hour + 11) % 12 + 1;
+      for (let k = 0; k < n; k++) { const tt = t + k * 2.4; for (const [r, a] of [[0.5, 0.05], [1, 0.035], [1.19, 0.02], [1.5, 0.015], [2.0, 0.012], [2.74, 0.008]]) play(bell, tt, 196 * r, 196 * r * 0.998, 6, a * 0.8, 0.01, 0.3); }
+      strikeAt = Infinity;
     }
     if (t > tR) {
       if (night > 0.5) { // a tawny owl: a long hoot, a pause, then a wavering one

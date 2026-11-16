@@ -60,10 +60,17 @@ if (mode === 'poses') {
 } else if (mode === 'animal') {
   // node shots.mjs animal kind distance name [dir]
   const d = outDir(3); await setScale(0.5); await page.evaluate((k, r) => dev.animal(k, r), +args[0], +args[1]); await frames(20); await shot(path.join(d, `${args[2] || 'animal'}.png`));
+} else if (mode === 'atlas') {
+  // a clean full-resolution map render and the label positions, for the atlas page
+  const d = outDir(0); await setScale(1); await page.evaluate(() => dev.pose(0)); const labels = await page.evaluate(() => dev.mapClean()); await frames(40);
+  await page.screenshot({ path: path.join(d, 'atlas.jpg'), type: 'jpeg', quality: 86 }); writeFileSync(path.join(d, 'atlas.json'), labels); console.log(labels);
+} else if (mode === 'map') {
+  // the in-game map, after flying to pose 1 (so the 'you are here' arrow has somewhere to be)
+  const d = outDir(0); await setScale(0.5); await page.evaluate(() => { dev.pose(0); dev.map(); }); await frames(30); await shot(path.join(d, `${args[1] || 'map'}.png`));
 } else if (mode === 'eval') {
   console.log(await page.evaluate(args[0]));
 } else if (mode === 'look') {
-  const d = outDir(7); await setScale(0.5); await page.evaluate(() => dev.freeze(30));
+  const d = outDir(7); await setScale(0.5); await page.evaluate((t) => dev.freeze(t), +(process.env.FREEZE || 30));
   await page.evaluate((a) => { dev.look(...a); dev.hide(); }, args.slice(0, 6).map(Number)); await frames(20); await shot(path.join(d, `${args[6] || 'look'}.png`));
 } else if (mode === 'fly') {
   const d = outDir(0), n = +(args[1] || 24); await setScale(0.5);

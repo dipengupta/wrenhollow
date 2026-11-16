@@ -5,9 +5,10 @@
 // uv.y = pivot y. Limbs: 0 body, 1-4 legs (front left, front right, back left, back right), 5 head and neck.
 // Materials: 30 deer coat, 31 antler and hoof, 32 wool, 33 dark face and legs, 34 swan white, 35 bill, 36 duck brown,
 // 37 duck green head, 38 eagle plumage, 39 eagle coverts, 40 boat paint, 41 boat timber, 42 eagle head (pale gold),
-// 43 duck grey flank. Limbs 6 and 7 are the wings (they roll about
+// 43 duck grey flank, 44 rower's coat, 45 skin, 46 heron grey, 47 heron legs. Limbs 8 and 9 are oars (they sweep about
+// the vertical at the rowlock: pivot x, pivot z), limb 10 the rower leaning through the stroke. Limbs 6 and 7 are the wings (they roll about
 // the body's axis, pivot z in place of pivot x). A small simulation moves them (lifeTick); its output is one preallocated instance array.
-const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5, BOAT: 6 };
+const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5, BOAT: 6, FERRY: 7, HERON: 8 };
 function lifeMeshes() {
   const m = new Mesh(), runs = [];
   const L = (limb, px, py) => [limb * 10 + px + 2, py];
@@ -114,7 +115,7 @@ function lifeMeshes() {
     }
   });
   // a clinker rowboat: painted hull, timber inside, two thwarts and a pair of oars shipped along the sides
-  run(() => {
+  const boatHull = (oars) => {
     const NS = 12, NP = 8, len = 2.1;
     const st = (i) => -len + (2 * len * i) / NS;
     const w = (x) => 0.66 * sqrt(max(0, 1 - (x / (len + 0.08)) ** 2)) + 0.02, top = (x) => 0.38 + 0.12 * (x / len) ** 2, bot = (x) => -0.2 + 0.08 * (x / len) ** 4;
@@ -128,7 +129,30 @@ function lifeMeshes() {
       for (let i = 0; i < NS; i++) for (let j = 0; j < NP; j++) { const a = b0 + i * (NP + 1) + j, b = a + NP + 1; m.tri(a, b, b + 1); m.tri(a, b + 1, a + 1); }
     }
     for (const x of [-0.7, 0.45]) { const hw = w(x) * 0.92; m.quad([x - 0.12, 0.2, -hw], [x + 0.12, 0.2, -hw], [x + 0.12, 0.2, hw], [x - 0.12, 0.2, hw], 41, 2, 0, 2, 0, 2, 0, 2, 0); }
-    for (const z of [-1, 1]) { seg([-1.6, 0.36, z * 0.5], [1.2, 0.33, z * 0.55], 0.025, 0.025, 41, L(0, 0, 0), 5); m.quad([1.2, 0.32, z * 0.5], [1.75, 0.3, z * 0.48], [1.75, 0.3, z * 0.62], [1.2, 0.32, z * 0.6], 41, 2, 0, 2, 0, 2, 0, 2, 0); }
+    if (oars) for (const z of [-1, 1]) { seg([-1.6, 0.36, z * 0.5], [1.2, 0.33, z * 0.55], 0.025, 0.025, 41, L(0, 0, 0), 5); m.quad([1.2, 0.32, z * 0.5], [1.75, 0.3, z * 0.48], [1.75, 0.3, z * 0.62], [1.2, 0.32, z * 0.6], 41, 2, 0, 2, 0, 2, 0, 2, 0); }
+    };
+  run(() => boatHull(true));
+  // the ferryman: the same boat, a rower on the forward thwart facing the stern, oars out and pulling
+  run(() => {
+    boatHull(false);
+    const tl = L(10, 0.45, 0.22);
+    ell(0.45, 0.6, 0, 0.17, 0.26, 0.2, 44, tl); ell(0.42, 0.98, 0, 0.1, 0.11, 0.1, 45, tl); ell(0.43, 1.06, 0, 0.11, 0.05, 0.11, 44, tl);
+    for (const z of [-1, 1]) seg([0.45, 0.78, z * 0.17], [0.22, 0.6, z * 0.36], 0.055, 0.045, 44, tl);
+    for (const sd of [1, -1]) {
+      const lb = L(sd > 0 ? 8 : 9, 0.5, sd * 0.6);
+      seg([0.2, 0.58, sd * 0.32], [0.5, 0.38, sd * 0.62], 0.025, 0.025, 41, lb, 5);
+      seg([0.5, 0.38, sd * 0.62], [0.9, -0.02, sd * 2.1], 0.025, 0.02, 41, lb, 5);
+      m.quad([0.86, 0.02, sd * 1.75], [0.98, -0.06, sd * 2.25], [0.86, -0.06, sd * 2.25], [0.76, 0.02, sd * 1.75], 41, lb[0], lb[1], lb[0], lb[1], lb[0], lb[1], lb[0], lb[1]);
+    }
+  });
+  // grey heron: long legs, an S-shaped neck, a dagger bill; it stands in the shallows
+  run(() => {
+    ell(0, 0.95, 0, 0.3, 0.17, 0.15, 46, L(0, 0, 0), 10, 6); ell(-0.32, 0.9, 0, 0.14, 0.06, 0.08, 46);
+    const hd = L(5, 0.2, 1.02);
+    seg([0.18, 1.02, 0], [0.32, 1.3, 0], 0.06, 0.045, 46, hd); seg([0.32, 1.3, 0], [0.27, 1.52, 0], 0.045, 0.04, 46, hd);
+    ell(0.31, 1.56, 0, 0.075, 0.05, 0.045, 34, hd); seg([0.3, 1.58, 0], [0.12, 1.62, 0], 0.012, 0.005, 33, hd, 4);
+    seg([0.36, 1.56, 0], [0.6, 1.52, 0], 0.022, 0.004, 35, hd, 4);
+    for (const [k, z] of [[1, 0.06], [3, -0.06]]) seg([0, 0.86, z], [0.02, 0, z], 0.022, 0.016, 47, L(k, 0, 0.86));
   });
   return { m, runs };
 }
@@ -143,7 +167,7 @@ let LN = 0, lifeCalm = false; // calm: nothing runs from the camera (dev screens
 function makeLife() {
   rseed(21);
   const byKind = [[], [], [], [], []];
-  const land = (x, z) => { const y = H(x, z); return y > 3 && y < 150 && slope(x, z) < 0.45 && !OBJS.some((o) => x > o[2] - 4 && x < o[5] + 4 && z > o[4] - 4 && z < o[7] + 4); };
+  const land = (x, z) => { const y = H(x, z); return y > 3 && y < 150 && slope(x, z) < 0.45 && !OBJS.some((o) => !o.wall && x > o[2] - 4 && x < o[5] + 4 && z > o[4] - 4 && z < o[7] + 4); };
   const water = (x, z) => H(x, z) < -1.5 && H(x + 6, z) < -0.5 && H(x - 6, z) < -0.5 && H(x, z + 6) < -0.5 && H(x, z - 6) < -0.5;
   const herd = (kind, cx, cz, n, r, ok, stag) => {
     let placed = 0;
@@ -166,10 +190,14 @@ function makeLife() {
   for (const [x, z] of [[-120, 300], [-250, 220], [-420, 330]]) herd(KIND.DUCK, x, z, 5, 10, water);
   byKind.push([[0, 0, 0, 0]]);
   byKind.push([[-126, 172, 0.6, 0], [-139, 166, 2.1, 0], [-318, 306, 4, 0]]);
+  byKind.push([[FERRY[0], FERRY[1], 0, 0]]);
+  const herons = []; for (const [cx, cz] of [[-230, 205], [70, 215], [-420, 380], [-30, 205]]) for (let k = 0; k < 200; k++) { const x = cx + rr(-40, 40), z = cz + rr(-40, 40), h = H(x, z); if (h > -0.6 && h < -0.15 && slope(x, z) < 0.3) { herons.push([x, z, x, z]); break; } }
+  byKind.push(herons);
   LN = 0;
   for (let k = 0; k < byKind.length; k++) {
     LRUN.push([LN, byKind[k].length]);
     for (const [x, z, hx, hz] of byKind[k]) {
+      if (k === KIND.FERRY) { LA[LN * LS] = k; LA[LN * LS + 14] = 1.25; LN++; continue; }
       if (k === KIND.BOAT) { LA[LN * LS] = k; LA[LN * LS + 1] = x; LA[LN * LS + 2] = z; LA[LN * LS + 3] = hx; LA[LN * LS + 14] = 1.25; LN++; continue; }
       if (LN >= LIFEMAX) break;
       const a = LA.subarray(LN * LS, LN * LS + LS);
@@ -179,6 +207,9 @@ function makeLife() {
     }
   }
 }
+// the ferry's course across Loch Wren, from the boathouse jetty to Inchkeld
+const FERRY = [-135, 186, -210, 262, -300, 360, -390, 455, -440, 520];
+const FERRYLEN = (() => { let l = 0; for (let i = 0; i + 3 < FERRY.length; i += 2) l = max(l, hypot(FERRY[i + 2] - FERRY[i], FERRY[i + 3] - FERRY[i + 1])); return l; })();
 // the eagle's flight: wide slow circles over the crag (position and direction into EG)
 const EG = new Float64Array(6);
 function eagleAt(t) {
@@ -190,9 +221,17 @@ function eagleAt(t) {
 function lifeTick(dt, cx, cy, cz) {
   for (let i = 0; i < LN; i++) {
     const b = i * LS, k = LA[b];
+    if (k === KIND.FERRY) {
+      // back and forth between the boathouse and the island, at a steady pull
+      const o = i * 8, n = FERRY.length / 2 - 1; let u = (F[TIME] * 1.3 / FERRYLEN) % (2 * n); if (u > n) u = 2 * n - u;
+      const j = min(floor(u), n - 1), f = u - j, ax = FERRY[j * 2], az = FERRY[j * 2 + 1], bx = FERRY[j * 2 + 2], bz = FERRY[j * 2 + 3];
+      const back = ((F[TIME] * 1.3 / FERRYLEN) % (2 * n)) > n;
+      LI[o] = ax + (bx - ax) * f; LI[o + 1] = sin(F[TIME] * 1.3) * 0.04 - 0.05; LI[o + 2] = az + (bz - az) * f;
+      LI[o + 3] = atan2(bz - az, bx - ax) + (back ? PI : 0); LI[o + 4] = 1.25; LI[o + 5] = F[TIME] * 0.38 % 1; LI[o + 6] = 1; LI[o + 7] = 0; continue;
+    }
     if (k === KIND.BOAT) { const o = i * 8, t = F[TIME] + i * 3; LI[o] = LA[b + 1]; LI[o + 1] = sin(t * 1.3) * 0.05 - 0.05; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3] + sin(t * 0.21) * 0.15; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.EAGLE) { eagleAt(F[TIME]); const o = i * 8; LI[o] = EG[0]; LI[o + 1] = EG[1]; LI[o + 2] = EG[2]; LI[o + 3] = atan2(EG[5], EG[3]); LI[o + 4] = LA[b + 14]; LI[o + 5] = F[TIME] * 0.55 % 1; LI[o + 6] = 1; LI[o + 7] = 0.15 + 0.55 * sstep(0.75, 0.95, sin(F[TIME] * 0.23 + 3.3)); continue; }
-    const swim = k >= KIND.SWAN, sheep = k === KIND.SHEEP;
+    const heron = k === KIND.HERON, swim = k >= KIND.SWAN && !heron, sheep = k === KIND.SHEEP || heron;
     let x = LA[b + 1], z = LA[b + 2];
     const dx = x - cx, dz = z - cz, dc = hypot(dx, dz), above = cy - (swim ? 0 : H(x, z));
     // too close: run (deer bolt, sheep trot off, birds paddle away)
@@ -218,7 +257,7 @@ function lifeTick(dt, cx, cy, cz) {
       let dy = atan2(tz, tx) - LA[b + 3]; dy -= TAU * round(dy / TAU);
       LA[b + 3] += clamp(dy, -dt * (st === 2 ? 4 : 1.5), dt * (st === 2 ? 4 : 1.5));
       const nx = x + cos(LA[b + 3]) * sp * dt, nz = z + sin(LA[b + 3]) * sp * dt, h = H(nx, nz);
-      const ok = swim ? h < -0.8 : h > 2 && slope(nx, nz) < 0.55 && abs(nx) < 990 && abs(nz) < 990;
+      const ok = swim ? h < -0.8 : heron ? h > -0.7 && h < 0.4 : h > 2 && slope(nx, nz) < 0.55 && abs(nx) < 990 && abs(nz) < 990;
       if (ok) { x = nx; z = nz; } else { LA[b + 6] = x - tx; LA[b + 7] = z - tz; LA[b + 3] += 0.8; }
     }
     LA[b + 1] = x; LA[b + 2] = z;
@@ -227,9 +266,9 @@ function lifeTick(dt, cx, cy, cz) {
     LA[b + 11] = (LA[b + 11] + dt * LA[b + 10] / stride) % 1;
     LA[b + 12] += ((sp > 0 ? (st === 2 && !sheep ? 2 : 1) : 0) - LA[b + 12]) * min(1, dt * 4);
     // heads down while grazing (dabbling, for the birds), up and alert otherwise
-    const g = st === 0 ? (swim ? 0.5 + 0.5 * sin(F[TIME] * 0.5 + i) : 1) : 0;
+    const g = st === 0 ? (swim ? 0.5 + 0.5 * sin(F[TIME] * 0.5 + i) : heron ? sstep(0.93, 0.99, sin(F[TIME] * 0.37 + i * 2.1)) : 1) : 0;
     LA[b + 13] += (g - LA[b + 13]) * min(1, dt * 1.5);
-    const o = i * 8, y = swim ? 0.02 * sin(F[TIME] * 1.3 + i) : H(x, z);
+    const o = i * 8, y = swim ? 0.02 * sin(F[TIME] * 1.3 + i) : heron ? max(H(x, z), -0.45) : H(x, z);
     LI[o] = x; LI[o + 1] = y; LI[o + 2] = z; LI[o + 3] = LA[b + 3]; LI[o + 4] = LA[b + 14]; LI[o + 5] = LA[b + 11]; LI[o + 6] = LA[b + 12]; LI[o + 7] = swim ? max(LA[b + 13], 0) : LA[b + 13];
   }
 }

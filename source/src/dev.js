@@ -54,6 +54,12 @@
     h: (x, z) => H(x, z),
     time: (i) => applyTime(i),
     calm: () => { lifeCalm = true; },
+    map: () => { stop(); openMap(); },
+    // the map with no labels and no buttons (for the atlas page), and where each place falls on it, in percent
+    mapClean: () => { stop(); openMap(); $('map').hidden = true; $('o').style.display = 'none'; return JSON.stringify(PLACES.map((p) => [p.name, ...mapAt(...p.at).map((v) => +v.toFixed(2))])); },
+    wet: (t) => { stop(); F[FLT] = t; flyAt(); camUB(UB, false); const o = []; for (let i = 0; i < WC.length; i += 4) { const dx = max(WC[i] - F[CX], 0, F[CX] - WC[i + 2]), dz = max(WC[i + 1] - F[CZ], 0, F[CZ] - WC[i + 3]); if (dx * dx + dz * dz < REFLD * REFLD && inView(WC[i], -1, WC[i + 1], WC[i + 2], 1.5, WC[i + 3])) o.push(Array.from(WC.subarray(i, i + 4))); } return JSON.stringify({ cam: [F[CX] | 0, F[CY] | 0, F[CZ] | 0], cells: o }); },
+    // open hilltops: high, gentle, no trees within r metres, away from buildings
+    tops: (r = 30) => { const out = []; for (let z = -900; z <= 900; z += 25) for (let x = -900; x <= 900; x += 25) { const y = H(x, z); if (y < 40 || slope(x, z) > 0.18) continue; if (OBJS.some((o) => x > o[2] - 30 && x < o[5] + 30 && z > o[4] - 30 && z < o[7] + 30)) continue; let near = false; for (let i = 0; i < TW.n && !near; i++) if (abs(TW.data[i * 8] - x) < r && abs(TW.data[i * 8 + 2] - z) < r) near = true; if (!near && H(x + 40, z) < y + 3 && H(x - 40, z) < y + 3 && H(x, z + 40) < y + 3 && H(x, z - 40) < y + 3) out.push([x, z, y | 0]); } return JSON.stringify(out.slice(0, 40)); },
     // frame the first animal of a kind from a distance, from the side and a little above
     animal: (k, d) => { lifeCalm = true; stop(); const i = LRUN[k][0] * 8, x = LI[i], y = LI[i + 1], z = LI[i + 2], a = LI[i + 3] + PI / 2; lookAt(x + cos(a) * d, y + d * 0.3 + 1, z + sin(a) * d, x, y + 0.9, z); },
     trees: (x, z, r) => { const o = []; for (let i = 0; i < TW.n && o.length < 5; i++) { const a = TW.data[i * 8], b = TW.data[i * 8 + 2]; if (hypot(a - x, b - z) < r) o.push([a | 0, TW.data[i * 8 + 1] | 0, b | 0]); } return JSON.stringify(o); },

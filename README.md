@@ -46,6 +46,7 @@ It needs a browser with **WebGPU**.
 | Season | `Y`, or **Season** in the menu |
 | Weather | `R`, or **Weather** in the menu |
 | Follow the eagle | `G` (any movement key takes you back) |
+| Map | `N`, or **Map** in the menu: click a place to fly there |
 | Let it fly itself | **Watch** in the menu (any key or click stops it) |
 | Performance stats | `H` |
 | Detail level | **Low**, **Medium** or **High** in the menu (reloads the page) |
@@ -74,12 +75,16 @@ The ground, the walls and the towers are solid. You can fly through the covered 
 - **The land**: a covered timber bridge over a rocky gorge, a multi-arch viaduct, a village with smoking chimneys and a
   church, about 90,000 pines and birches, heather, bracken, rock faces, snow-capped mountains
 - **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
-  night stars, a band of the galaxy and the moon with its path on the loch
-- **Life**: herds of red deer that bolt when you fly too close, sheep on the village pastures, swans and ducks on
+  night stars, shooting stars, a band of the galaxy and the moon with its path on the loch; the northern lights on
+  clear winter nights
+- **Places**: the map names seventeen of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
+  Kilwren, the island of Inchkeld and the Grey Stones. `?place=starwatch` in the address starts the flight there.
+- **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, fish rising on the loch,
+  herds of red deer that bolt when you fly too close, sheep on the village pastures, swans and ducks on
   the loch, a golden eagle circling the crag, rooks by day, an owl and bats at night, fireflies on summer evenings,
   lanterns along the viaduct, the bridge and the village lane, chimney smoke
-- **Sound**: wind that rises with height, speed and the weather, rain, lapping water, a distant bell, rooks by day
-  and an owl at night
+- **Sound**: wind that rises with height, speed and the weather, rain, lapping water, the Bell Tower striking the
+  hours, rooks by day and an owl at night
 
 ## How it works
 

@@ -3,7 +3,7 @@
 // ============================================================================
 // Materials (vertex w): 0 ashlar, 1 slate, 2 lit window, 3 timber, 4 copper, 5 dressed trim, 6 lead/iron,
 // 7 plaster, 8 greenhouse glass, 9 clock face, 10 dark window, 11 thatch, 12 paving, 13 rubble, 14 rose window,
-// 15 traceried window, 16 lantern glass
+// 15 traceried window, 16 lantern glass, 17 standing stone
 // Colliders: towers are vertical cylinders, everything else oriented boxes. The camera is kept out of both.
 const COLC = [], COLB = []; // [x, z, r, ytop] ; [cx, cz, ex, ez, half len, half wid, y0, y1]
 const OBJS = []; // [first index, index count, minx, miny, minz, maxx, maxy, maxz] per culling object
@@ -468,6 +468,50 @@ function buildCastle() {
     for (const x of [189, 215]) lantern(x, -86, C + 2.6, 0); // hung inside the covered bridge
     grp = 3; // the jetty lantern glows but casts no pool (it would put the whole castle inside a group's box)
     lantern(-110 - 14 - 0.7 * 11, 156 + 14 - 0.71 * 11, 2.3, 1.5);
+  }
+  end();
+  // drystone walls around the village pastures: knee-high runs that follow the ground, a gap for a gate, broken
+  // where the lane passes. Each enclosure is its own object, marked as a wall so the sheep may graze inside.
+  {
+    const P = (t) => [mix(170, 330, t) + 25 * sin(t * 7), mix(-380, -500, t) + 30 * cos(t * 5)];
+    const nearLane = (x, z) => { for (let t = 0; t <= 1; t += 0.01) { const [a, b] = P(t); if (hypot(x - a, z - b) < 5) return true; } return false; };
+    const solid = OBJS.length;
+    for (const [cx, cz, R, seed] of [[330, -370, 46, 1], [190, -520, 44, 2], [360, -500, 36, 3]]) {
+      begin();
+      const n = 9, pts = []; rseed(60 + seed);
+      for (let i = 0; i < n; i++) { const a = i / n * TAU + rr(-0.15, 0.15), r = R * rr(0.85, 1.15); pts.push([cx + cos(a) * r, cz + sin(a) * r]); }
+      for (let i = 0; i < n; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % n], L = hypot(bx - ax, bz - az), ex = (bx - ax) / L, ez = (bz - az) / L;
+        for (let t = 0; t < L; t += 2.2) {
+          if (i === seed % n && t > L / 2 - 2 && t < L / 2 + 2) continue;          // the gate
+          const x = ax + ex * (t + 1.1), z = az + ez * (t + 1.1);
+          if (nearLane(x, z) || OBJS.slice(0, solid).some((o) => x > o[2] - 1 && x < o[5] + 1 && z > o[4] - 1 && z < o[7] + 1)) continue;
+          const g = min(H(x - ex * 1.1, z - ez * 1.1), H(x + ex * 1.1, z + ez * 1.1)) - 0.3, h = 1.25 + 0.2 * rnd();
+          box(x, z, ex, ez, 1.15, 0.32, g, g + h, 13, 13); box(x, z, ex, ez, 1.2, 0.36, g + h, g + h + 0.12, 13, 13);  // coping stones
+        }
+      }
+      end(); OBJS[OBJS.length - 1].wall = true;
+    }
+  }
+  // the Grey Stones: a ring of standing stones on the open hill east of the loch, one great recumbent stone
+  begin();
+  {
+    const cx = 640, cz = 262; rseed(77);
+    for (let i = 0; i < 11; i++) {
+      const a = i / 11 * TAU + rr(-0.1, 0.1), r = 11 + rr(-0.8, 0.8), x = cx + cos(a) * r, z = cz + sin(a) * r, g = H(x, z) - 0.6, h = rr(2.2, 3.8);
+      const tx = -sin(a), tz = cos(a), w = rr(0.55, 0.85), d = rr(0.3, 0.45), lx = rr(-0.3, 0.3), lz = rr(-0.2, 0.2);
+      // rings of seven points up the stone, each a little wider or narrower, the whole leaning; the top rounded and uneven
+      const NR = 5, NP = 7, ring = [];
+      for (let k = 0; k <= NR; k++) {
+        const f = k / NR, sh = 1 - 0.35 * f * f, y = g + h * (k === NR ? 0.96 + rr(-0.06, 0.06) : f), pts = [];
+        for (let j = 0; j < NP; j++) { const an = j / NP * TAU, jr = rr(0.85, 1.12) * (k === NR ? 0.45 : sh); pts.push([x + (tx * cos(an) * w + cos(a) * sin(an) * d) * jr + tx * lx * f * f + cos(a) * lz * f * f, y, z + (tz * cos(an) * w + sin(a) * sin(an) * d) * jr + tz * lx * f * f + sin(a) * lz * f * f]); }
+        ring.push(pts);
+      }
+      for (let k = 0; k < NR; k++) for (let j = 0; j < NP; j++) { const j1 = (j + 1) % NP, A = ring[k][j], B = ring[k][j1], C2 = ring[k + 1][j1], D2 = ring[k + 1][j]; m.quad(A, B, C2, D2, 17, j, A[1], j + 1, B[1], j + 1, C2[1], j, D2[1]); }
+      const top = ring[NR], tc = [top.reduce((s, p) => s + p[0], 0) / NP, top[0][1] + 0.12, top.reduce((s, p) => s + p[2], 0) / NP];
+      for (let j = 0; j < NP; j++) m.quad(top[j], top[(j + 1) % NP], tc, tc, 17, 0, 0, 1, 0, 0.5, 1, 0.5, 1);
+    }
+    box(cx + 10.5, cz + 2, 0.2, 0.98, 2, 0.7, H(cx + 10.5, cz + 2) - 0.4, H(cx + 10.5, cz + 2) + 1.3, 17);
   }
   end();
   // the village church

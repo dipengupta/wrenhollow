@@ -385,7 +385,7 @@ function flyAt() {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false, watch = false, follow = false;
+let hud = false, watch = false, follow = false, mapOpen = false;
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
 const TANH = 0.62, NEAR = 0.15;
 const submitList = [null];
@@ -405,7 +405,7 @@ function camUB(m, refl) {
   m[32] = cx; m[33] = cy; m[34] = cz; m[35] = F[TIME];
   m[44] = rx; m[45] = 0; m[46] = rz; m[47] = TANH * asp;
   m[48] = ux; m[49] = uy; m[50] = uz; m[51] = TANH;
-  m[52] = fx; m[53] = fy; m[54] = fz; m[55] = EXPO;
+  m[52] = fx; m[53] = fy; m[54] = fz; m[55] = mapOpen ? 1 : 0; // fw.w: the map view (no shadows, little haze)
   C[0] = cx; C[1] = cy; C[2] = cz; C[3] = fx; C[4] = fy; C[5] = fz; C[6] = rx; C[7] = rz; C[8] = ux; C[9] = uy; C[10] = uz;
 }
 // conservative box-in-frustum test against the camera basis in C
@@ -434,7 +434,16 @@ const WC = (() => {
   }
   return new Float32Array(a);
 })();
-function waterInView() { for (let i = 0; i < WC.length; i += 4) if (inView(WC[i], -1, WC[i + 1], WC[i + 2], 1.5, WC[i + 3])) return true; return false; }
+// only water within REFLD counts: further away the water shader reflects the sky instead
+const REFLD = 1800;
+let wetUntil = 0;
+function waterInView() {
+  for (let i = 0; i < WC.length; i += 4) {
+    const dx = max(WC[i] - F[CX], 0, F[CX] - WC[i + 2]), dz = max(WC[i + 1] - F[CZ], 0, F[CZ] - WC[i + 3]);
+    if (dx * dx + dz * dz < REFLD * REFLD && inView(WC[i], -1, WC[i + 1], WC[i + 2], 1.5, WC[i + 3])) return true;
+  }
+  return false;
+}
 // terrain patches: level of detail by distance; refl draws one level coarser
 function drawTerrain(r, pl, plFar, refl) {
   r.setPipeline(pl); r.setIndexBuffer(ibTerr, 'uint32');
@@ -480,7 +489,9 @@ function drawTrees(r, pl, refl) {
 }
 function render() {
   camUB(UB, false); Q.writeBuffer(ubo, 0, UB);
-  const wet = waterInView();
+  // the reflection stays on for a second after the water was last in view, so it does not flicker on and off at the edge
+  if (waterInView()) wetUntil = F[TIME] + 1;
+  const wet = F[TIME] < wetUntil;
   camUB(UBR, true); Q.writeBuffer(uboR, 0, UBR);
   // the sun on screen, for the shafts
   { const sf = SUN[0] * F[FX] + SUN[1] * F[FY] + SUN[2] * F[FZ]; const asp = W / H2;
@@ -496,14 +507,15 @@ function render() {
   // the world mirrored in the loch (only drawn when the camera is near enough to the water to see it matter)
   let r = e.beginRenderPass(passRefl);
   r.setBindGroup(0, bgR);
-  if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); drawTrees(r, R.tree, true); drawLife(r, R.life); r.setPipeline(R.sky); r.draw(3); }
+  // in rain and snow the reflection is blurred by ripples and haze: the trees are left out of it
+  if (!(DBG & 1) && wet) { drawCastle(r, R.solid); drawTerrain(r, R.terr, R.far, true); if (!WEATHER[weather].precip) drawTrees(r, R.tree, true); drawLife(r, R.life); r.setPipeline(R.sky); r.draw(3); }
   r.end();
   camUB(UB, false);
   r = e.beginRenderPass(passScene);
   r.setBindGroup(0, bg0);
   if (!(DBG & 2)) drawCastle(r, P.solid);
   if (!(DBG & 4)) drawTerrain(r, P.terr, P.far, false);
-  if (!(DBG & 8) && wet) { r.setPipeline(P.water); r.draw(4); }
+  if (!(DBG & 8)) { r.setPipeline(P.water); r.draw(4); }
   if (!(DBG & 16)) drawTrees(r, P.tree, false);
   drawLife(r, P.life);
   r.setPipeline(P.banner); r.draw(6 * 24, NBAN);
@@ -518,7 +530,7 @@ function render() {
   r.setPipeline(P.smoke); r.draw(4, NSMOKE);
   r.setPipeline(P.fly); r.draw(4, NFLY);
   if (!(DBG & 64)) {
-    if (WEATHER[weather].precip > 0) { r.setPipeline(P.precip); r.draw(4, NPREC); }
+    if (WEATHER[weather].precip > 0) { r.setPipeline(P.precip); r.draw(4, SEASON[season].snow > 0.5 ? NPREC * 0.7 | 0 : NPREC); } // flakes are bigger than drops: fewer
     else if (SEASON[season].phase === 2) { r.setPipeline(P.precip); r.draw(4, NPREC >> 2); } // autumn: leaves falling
   }
   r.end();
@@ -574,7 +586,8 @@ function frame(now) {
     dynN = dynT = dynG = dynGN = 0; resize();
   }
   F[TIME] += dt;
-  if (watch) { F[FLT] = (F[FLT] + dt) % FLYT; flyAt(); }
+  if (mapOpen) lookAt(MAPC[0], MAPC[1], MAPC[2], MAPC[0], 0, MAPC[2] - 0.001);
+  else if (watch) { F[FLT] = (F[FLT] + dt) % FLYT; flyAt(); }
   else if (follow) {
     // ride behind the eagle
     eagleAt(F[TIME]); const ex = EG[0], ey = EG[1], ez = EG[2], fx = EG[3], fz = EG[5];
@@ -622,7 +635,8 @@ const key = (e, v) => {
       else if (e.code === 'KeyG') { follow = !follow && TOD[tod].night < 0.3 && WEATHER[weather].precip < 0.5; const n = $('n'); n.textContent = follow ? 'Following the eagle' : TOD[tod].night >= 0.3 || WEATHER[weather].precip >= 0.5 ? 'The eagle is not out' : ''; n.className = ''; void n.offsetWidth; n.className = 'on'; }
       else if (e.code === 'KeyY') setSeason(season + 1, true);
       else if (e.code === 'KeyR') setWeather(weather + 1, true);
-      else if (e.code === 'Escape') ui(true);
+      else if (e.code === 'Escape') { if (mapOpen) closeMap(); else ui(true); }
+      else if (e.code === 'KeyN') { if (mapOpen) closeMap(); else openMap(); }
       else if (e.code >= 'Digit1' && e.code <= 'Digit6') lookAt(...POSES[e.code.charCodeAt(5) - 49]);
     }
   }
@@ -631,7 +645,7 @@ addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !==
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = 0; tId = -1; tN = 0; };
 const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
-canvas.addEventListener('click', capture);
+canvas.addEventListener('click', () => { if (!mapOpen) capture(); });
 addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; } });
 addEventListener('blur', release);
 const touch = (e) => {
@@ -660,6 +674,34 @@ const go = () => {
   if (!mob) capture();
 };
 bDive.onclick = go; $('o').onclick = () => ui(true);
+// ---------------------------------------------------------------- the map: the world from high above, the places named
+const MAPC = [-20, 1450, 60], MS = new Float64Array(5), mapEl = $('map'), youEl = $('you');
+const mapAt = (x, y, z) => { const d = MAPC[1] - y; return [50 + 50 * (x - MAPC[0]) / (d * TANH * W / H2), 50 + 50 * (z - MAPC[2]) / (d * TANH)]; };
+const toast = (s) => { const n = $('n'); n.textContent = s; n.className = ''; void n.offsetWidth; n.className = 'on'; };
+const mapSvg = mapEl.querySelector('svg');
+PLACES.forEach((p, i) => { const b = document.createElement('button'); b.className = 'pl' + ((p.tag || [1])[0] < 0 ? ' l' : ''); b.innerHTML = '<i></i><span>' + p.name + '</span>'; b.onclick = () => { closeMap(true); lookAt(...p.view); toast(p.name); capture(); }; mapEl.append(b); });
+function openMap() {
+  if (mapOpen || menu) return;
+  mapOpen = true; watch = follow = false; for (let k = 0; k < 5; k++) MS[k] = F[k];
+  release(); if (document.pointerLockElement) document.exitPointerLock();
+  // each label at its place, or set off to one side with a leader line where places crowd together
+  let lines = '';
+  mapEl.querySelectorAll('.pl').forEach((b, i) => {
+    const p = PLACES[i], [x, y] = mapAt(...p.at), t = p.tag || [0, 0], em = parseFloat(getComputedStyle(b).fontSize) || 14;
+    const lx = x + t[0] * em / innerWidth * 100, ly = y + t[1] * em / innerHeight * 100;
+    b.style.left = lx + '%'; b.style.top = ly + '%';
+    if (p.tag) lines += `<line x1="${x}%" y1="${y}%" x2="${lx}%" y2="${ly}%"/><circle cx="${x}%" cy="${y}%" r="3"/>`;
+  });
+  mapSvg.innerHTML = lines;
+  const [x, y] = mapAt(MS[0], H(MS[0], MS[2]), MS[2]); youEl.style.left = x + '%'; youEl.style.top = y + '%'; youEl.style.rotate = MS[3] + 'rad';
+  mapEl.hidden = false; canvas.style.filter = 'sepia(.4) saturate(.8) contrast(1.06) brightness(1.05)';
+}
+function closeMap(went) {
+  if (!mapOpen) return;
+  mapOpen = false; mapEl.hidden = true; canvas.style.filter = '';
+  if (!went) { for (let k = 0; k < 5; k++) F[k] = MS[k]; F[VX] = F[VY] = F[VZ] = 0; }
+}
+$('mp').onclick = () => { sound(); ui(false); bDive.textContent = 'Resume'; openMap(); };
 // watch: the camera tours the castle on its own until you press a key or click
 $('wt').onclick = () => { sound(); watch = true; follow = false; F[FLT] = 0; ui(false); bDive.textContent = 'Resume'; };
 canvas.addEventListener('mousedown', () => { watch = false; });
@@ -680,11 +722,15 @@ const setTime = row('tm', TOD, () => tod, applyTime, 'time');
 const setSeason = row('se', SEASON, () => season, applySeason, 'season');
 const setWeather = row('we', WEATHER, () => weather, applyWeather, 'weather', weatherName);
 $('q').querySelectorAll('button').forEach((b, i) => { if (i === 2 - LV) b.className = 'on'; else b.onclick = () => { keep('wrenhollow', 2 - i); location.reload(); }; });
-document.addEventListener('pointerlockchange', () => ui(!document.pointerLockElement));
+document.addEventListener('pointerlockchange', () => { if (!mapOpen) ui(!document.pointerLockElement); });
 
 // draw from every viewpoint once while loading, so the first sight of anything does not cost a frame later
 await say('Lighting the windows…', 1, 400);
+for (let t = 0; t < FLYT; t += 5) { F[FLT] = t; flyAt(); render(); }
+F[FLT] = 0;
 for (let i = POSES.length - 1; i >= 0; i--) { lookAt(...POSES[i]); render(); }
+// ?place=starwatch (any place's name, letters only) starts the flight there
+{ const q = (new URLSearchParams(location.search).get('place') || '').toLowerCase().replace(/[^a-z]/g, ''), p = PLACES.find((p) => p.name.toLowerCase().replace(/[^a-z]/g, '') === q); if (p) lookAt(...p.view); }
 await Q.onSubmittedWorkDone();
 setTimeout(keep, 15e3, 'wrenhollowLoad', '');
 ui(true);
