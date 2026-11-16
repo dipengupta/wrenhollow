@@ -29,7 +29,7 @@
     draw();
   };
   const start = (b) => {
-    flying = true; bench = b; F[FLT] = 0; last = F[LAST]; nFrame = nGpu = 0;
+    flying = true; bench = b; titlesOff = true; F[FLT] = 0; last = F[LAST]; nFrame = nGpu = 0;
     if (bench) { hud = false; info.textContent = ''; dynT = -Infinity; }
   };
   addEventListener('keydown', (e) => {
@@ -43,7 +43,7 @@
     flyTo: (t) => { stop(); F[FLT] = t; flyAt(); },
     look: (...a) => { stop(); lookAt(...a); },
     freeze: (t) => { frozen = t; },
-    hide: () => ui(false),
+    hide: () => { ui(false); titlesOff = true; },
     setPix: (p) => { pix = p; dynT = -Infinity; resize(); return [W, H2]; },
     bench: () => new Promise((r) => { done = r; ui(false); start(true); }),
     mask: (k) => { DBG = k; },
@@ -54,6 +54,8 @@
     h: (x, z) => H(x, z),
     time: (i) => applyTime(i),
     calm: () => { lifeCalm = true; },
+    titles: (on) => { titlesOff = !on; },
+    found: () => JSON.stringify([...FOUND]),
     flash: (v, az, seed = 0.3) => { DEVFLASH = v; UB[78] = UBR[78] = az; UB[77] = UBR[77] = seed; },
     falls: () => JSON.stringify(FALLS.map((v) => +v.toFixed(1))),
     map: () => { stop(); openMap(); },

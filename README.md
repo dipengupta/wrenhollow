@@ -46,7 +46,7 @@ It needs a browser with **WebGPU**.
 | Season | `Y`, or **Season** in the menu |
 | Weather | `R`, or **Weather** in the menu |
 | Follow the eagle | `G` (any movement key takes you back) |
-| Map | `N`, or **Map** in the menu: click a place to fly there |
+| Map | `N`, or **Map** in the menu: click a place to fly there. Places you have found are marked |
 | Let it fly itself | **Watch** in the menu (any key or click stops it) |
 | Performance stats | `H` |
 | Detail level | **Low**, **Medium** or **High** in the menu (reloads the page) |
@@ -82,7 +82,8 @@ the arches of the Long Viaduct.
 - **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
   night stars, shooting stars, a band of the galaxy and the moon with its path on the loch; the northern lights on
   clear winter nights
-- **Places**: the map names twenty-two of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
+- **Places**: as you arrive at one, its name appears on screen, and the map keeps count of the places you have
+  found. The map names twenty-two of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
   Kilwren, the island of Inchkeld, Dun Corran and the Grey Stones. `?place=starwatch` in the address starts the flight there.
 - **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, herds of red deer that bolt
   when you fly too close, highland cattle, sheep on the village pastures, rabbits and red squirrels, swans and ducks on

@@ -72,7 +72,8 @@ if (mode === 'poses') {
   console.log(await page.evaluate(args[0]));
 } else if (mode === 'look') {
   const d = outDir(7); await setScale(0.5); await page.evaluate((t) => dev.freeze(t), +(process.env.FREEZE || 30));
-  await page.evaluate((a) => { dev.look(...a); dev.hide(); }, args.slice(0, 6).map(Number)); await frames(20); await shot(path.join(d, `${args[6] || 'look'}.png`));
+  await page.evaluate((a) => { dev.look(...a); dev.hide(); }, args.slice(0, 6).map(Number)); await frames(20);
+  if (process.env.TITLES) { await page.evaluate(() => dev.titles(true)); await new Promise((r) => setTimeout(r, 2200)); } await shot(path.join(d, `${args[6] || 'look'}.png`));
 } else if (mode === 'fly') {
   const d = outDir(0), n = +(args[1] || 24); await setScale(0.5);
   for (let i = 0; i < n; i++) { const t = (i + 0.5) / n * 60; await page.evaluate((t) => { dev.freeze(t); dev.flyTo(t); }, t); await shot(path.join(d, `fly${String(i).padStart(2, '0')}.jpg`)); }

@@ -389,7 +389,7 @@ function flyAt() {
 }
 
 // ---------------------------------------------------------------- frame
-let hud = false, watch = false, follow = false, mapOpen = false;
+let hud = false, watch = false, follow = false, mapOpen = false, titlesOff = false;
 let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, mdx = 0, mdy = 0, lkx = 0, lky = 0, l2x = 0, l2y = 0, hN = 0, hMax = 0, hMin = 1e9, hPer = 1e9, hLate = 0, hTot = 0, tId = -1, tN = 0, tx0 = 0, ty0 = 0, tx = 0, ty = 0;
 const TANH = 0.62, NEAR = 0.15;
 const submitList = [null];
@@ -603,6 +603,7 @@ function frame(now) {
     dynN = dynT = dynG = dynGN = 0; resize();
   }
   F[TIME] += dt;
+  placeTick(dt);
   if (mapOpen) lookAt(MAPC[0], MAPC[1], MAPC[2], MAPC[0], 0, MAPC[2] - 0.001);
   else if (watch) { F[FLT] = (F[FLT] + dt) % FLYT; flyAt(); }
   else if (follow) {
@@ -696,6 +697,13 @@ const MAPC = [-20, 1450, 60], MS = new Float64Array(5), mapEl = $('map'), youEl 
 const mapAt = (x, y, z) => { const d = MAPC[1] - y; return [50 + 50 * (x - MAPC[0]) / (d * TANH * W / H2), 50 + 50 * (z - MAPC[2]) / (d * TANH)]; };
 const toast = (s) => { const n = $('n'); n.textContent = s; n.className = ''; void n.offsetWidth; n.className = 'on'; };
 const mapSvg = mapEl.querySelector('svg');
+// the places you have found (their names have appeared as you arrived), kept between visits
+const FOUND = new Set((() => { try { return JSON.parse(localStorage.wrenhollowFound || '[]'); } catch { return []; } })());
+const saveFound = () => { try { localStorage.wrenhollowFound = JSON.stringify([...FOUND]); } catch {} };
+const foundText = () => `Found ${PLACES.filter((p) => FOUND.has(p.name)).length} of ${PLACES.length}`;
+const showFound = () => { $('fdn').textContent = foundText(); };
+$('fr').onclick = () => { FOUND.clear(); saveFound(); showFound(); };
+showFound();
 PLACES.forEach((p, i) => { const b = document.createElement('button'); b.className = 'pl' + ((p.tag || [1])[0] < 0 ? ' l' : ''); b.innerHTML = '<i></i><span>' + p.name + '</span>'; b.onclick = () => { closeMap(true); lookAt(...p.view); toast(p.name); capture(); }; mapEl.append(b); });
 function openMap() {
   if (mapOpen || menu) return;
@@ -706,12 +714,33 @@ function openMap() {
   mapEl.querySelectorAll('.pl').forEach((b, i) => {
     const p = PLACES[i], [x, y] = mapAt(...p.at), t = p.tag || [0, 0], em = parseFloat(getComputedStyle(b).fontSize) || 14;
     const lx = x + t[0] * em / innerWidth * 100, ly = y + t[1] * em / innerHeight * 100;
-    b.style.left = lx + '%'; b.style.top = ly + '%';
+    b.style.left = lx + '%'; b.style.top = ly + '%'; b.classList.toggle('u', !FOUND.has(p.name));
     if (p.tag) lines += `<line x1="${x}%" y1="${y}%" x2="${lx}%" y2="${ly}%"/><circle cx="${x}%" cy="${y}%" r="3"/>`;
   });
-  mapSvg.innerHTML = lines;
+  mapSvg.innerHTML = lines; $('fc').textContent = foundText();
   const [x, y] = mapAt(MS[0], H(MS[0], MS[2]), MS[2]); youEl.style.left = x + '%'; youEl.style.top = y + '%'; youEl.style.rotate = MS[3] + 'rad';
   mapEl.hidden = false; canvas.style.filter = 'sepia(.4) saturate(.8) contrast(1.06) brightness(1.05)';
+}
+// arriving at a place: its name and a line about it fade in near the top of the screen. Checked four times a second;
+// one title at a time, the nearest place you have just come within reach of; a place does not repeat within a minute.
+const PIN = new Uint8Array(PLACES.length), PSHOWN = new Float64Array(PLACES.length).fill(-1e9), titleEl = $('pt');
+let placeT = 0, titleUntil = 0;
+function placeTick(dt) {
+  if ((placeT -= dt) > 0) return;
+  placeT = 0.25;
+  const now = performance.now() / 1000, quiet = menu || mapOpen || titlesOff || now < titleUntil;
+  let best = -1, bd = 1;
+  for (let i = 0; i < PLACES.length; i++) {
+    const p = PLACES[i], a = p.at, d = hypot(F[CX] - a[0], F[CY] - a[1], F[CZ] - a[2]) / p.r;
+    if (d > 1.3) PIN[i] = 0;
+    else if (d < 1 && !PIN[i]) { if (now - PSHOWN[i] < 60) PIN[i] = 1; else if (!quiet && d < bd) { best = i; bd = d; } }
+  }
+  if (best < 0) return;
+  const p = PLACES[best], isNew = !FOUND.has(p.name);
+  PIN[best] = 1; PSHOWN[best] = now; titleUntil = now + 5;
+  titleEl.children[1].textContent = p.name; titleEl.children[2].textContent = p.sub;
+  if (isNew) { FOUND.add(p.name); saveFound(); showFound(); }
+  titleEl.className = ''; void titleEl.offsetWidth; titleEl.className = isNew ? 'on new' : 'on';
 }
 function closeMap(went) {
   if (!mapOpen) return;
