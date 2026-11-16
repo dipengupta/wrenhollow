@@ -45,6 +45,7 @@ if (process.env.TIME) await page.evaluate((t) => dev.time(t), +process.env.TIME)
 if (process.env.CALM) await page.evaluate(() => dev.calm());
 if (process.env.SEASON) await page.evaluate((t) => dev.season(t), +process.env.SEASON);
 if (process.env.WEATHER) await page.evaluate((t) => dev.weather(t), +process.env.WEATHER);
+if (process.env.PRE) await page.evaluate(process.env.PRE);
 await new Promise((r) => setTimeout(r, 1500));
 const frames = (n) => page.evaluate((n) => new Promise((r) => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 const shot = async (file) => { await frames(8); await page.screenshot({ path: file, type: file.endsWith('.jpg') ? 'jpeg' : 'png', quality: file.endsWith('.jpg') ? 92 : undefined }); };

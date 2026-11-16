@@ -54,6 +54,8 @@
     h: (x, z) => H(x, z),
     time: (i) => applyTime(i),
     calm: () => { lifeCalm = true; },
+    flash: (v, az, seed = 0.3) => { DEVFLASH = v; UB[78] = UBR[78] = az; UB[77] = UBR[77] = seed; },
+    falls: () => JSON.stringify(FALLS.map((v) => +v.toFixed(1))),
     map: () => { stop(); openMap(); },
     // the map with no labels and no buttons (for the atlas page), and where each place falls on it, in percent
     mapClean: () => { stop(); openMap(); $('map').hidden = true; $('o').style.display = 'none'; return JSON.stringify(PLACES.map((p) => [p.name, ...mapAt(...p.at).map((v) => +v.toFixed(2))])); },
@@ -64,6 +66,7 @@
     animal: (k, d) => { lifeCalm = true; stop(); const i = LRUN[k][0] * 8, x = LI[i], y = LI[i + 1], z = LI[i + 2], a = LI[i + 3] + PI / 2; lookAt(x + cos(a) * d, y + d * 0.3 + 1, z + sin(a) * d, x, y + 0.9, z); },
     trees: (x, z, r) => { const o = []; for (let i = 0; i < TW.n && o.length < 5; i++) { const a = TW.data[i * 8], b = TW.data[i * 8 + 2]; if (hypot(a - x, b - z) < r) o.push([a | 0, TW.data[i * 8 + 1] | 0, b | 0]); } return JSON.stringify(o); },
     follow: () => { stop(); follow = true; },
+    kind: (k) => JSON.stringify(Array.from({ length: LRUN[k][1] }, (_, i) => { const o = (LRUN[k][0] + i) * 8; return [LI[o] | 0, LI[o + 1] | 0, LI[o + 2] | 0, +LI[o + 3].toFixed(2)]; })),
     life: () => JSON.stringify({ runs: LRUN, at: LRUN.map(([s0, n]) => n ? [LI[s0 * 8] | 0, LI[s0 * 8 + 1] | 0, LI[s0 * 8 + 2] | 0] : null) }),
     season: (i) => applySeason(i),
     weather: (i) => applyWeather(i),

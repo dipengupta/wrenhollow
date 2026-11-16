@@ -32,7 +32,10 @@ fn ravD(p: vec2f) -> f32 {
   let pa = p + vec2f(m, 0.) - vec2f(205., -330.); let ba = vec2f(-15., 545.);
   return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0., 1.));
 }
-fn ravF(z: f32) -> f32 { return mix(19., 1., ss(-300., 200., z)); }
+fn ravF(z: f32) -> f32 {
+  let up = 20. - 4. * ss(-300., -42., z); let dn = 1. + 3. * (1. - ss(-38., 200., z));
+  return mix(up, dn, ss(-41.2, -38.8, z)) - 1.8 * ss(10., 3., abs(z + 32.));   // the plunge pool below the falls
+}
 `;
 
 // ---------------------------------------------------------------- terrain height field (compute, load time)
@@ -106,7 +109,7 @@ fn hgt(p: vec2f) -> f32 {
   // north of the bridge the gorge relaxes into an open glen
   let gl = max(ss(-140., -230., p.y), ss(-20., 70., p.y));
   h = mix(h, max(h, 84. + 3. * fbm2(p * .03, 2) - 40. * ss(34., 110., rv + 25. * (fbm2(p * .012, 2) - .5))), ss(-215., -150., p.y) * ss(10., -60., p.y));
-  { let w = 3.5 + 3. * vn2(p * .012) + 6. * ss(40., 160., p.y);
+  { let w = 3.5 + 3. * vn2(p * .012) + 6. * ss(40., 160., p.y) + 3. * gl;
     let e = max(rv - w, 0.);
     let rib = 1. - abs(vn2(p * vec2f(.08, .2)) * 2. - 1.);
     let ew = e + 3.5 * rib * ss(5., 14., e) + 3. * (vn2(p * .11) - .5) * ss(3., 9., e);
@@ -117,6 +120,8 @@ fn hgt(p: vec2f) -> f32 {
   // the village shelf
   let vd = length((p - vec2f(250., -430.)) * vec2f(.8, 1.));
   h = mix(h, 24. + 2. * fbm2(p * .02, 2), ss(150., 70., vd));
+  // the Cairn of Keld: a low grassy burial mound east of the Grey Stones
+  { let cd = length(p - vec2f(675., 242.)); h += 4.2 * ss(13.5, 0., cd) * (1. - .1 * ss(4., 0., cd)); }
   // rocky texture where it is steep
   h += 1.4 * (fbm2(p * .09, 3) - .5) * ss(4., 40., abs(h - 30.));
   return h;
@@ -176,8 +181,9 @@ struct U {
   env: vec4f,  // night 0..1, window glow, cloud cover, grade
   env2: vec4f, // seasons: snow, foliage, wet, fog
   env3: vec4f, // weather: precipitation, wind, snow (not rain), clock hour
-  lbox: array<vec4f, 6>,   // lantern groups: min x, min z, max x, max z; then min y, max y, -, -
-  lamps: array<vec4f, 48>, // lanterns: position, 1 (0 = unused slot)
+  env4: vec4f, // lightning: flash, bolt seed, bolt azimuth, -
+  lbox: array<vec4f, 8>,   // lantern groups (3 fixed, 1 carried): min x, min z, max x, max z; then min y, max y, -, -
+  lamps: array<vec4f, 64>, // lanterns: position, 1 (0 = unused slot)
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var sRep: sampler;
@@ -253,8 +259,8 @@ fn lampLight(p: vec3f, n: vec3f) -> vec3f {
   let on = ss(.08, .45, u.env.x);
   if (on <= 0.01 || u.sun.w > .5 || distance(p, u.cam.xyz) > 300.) { return vec3f(0.); }
   var c = 0.;
-  for (var g = 0u; g < 3u; g++) {
-    let b = u.lbox[g]; let by = u.lbox[g + 3u];
+  for (var g = 0u; g < 4u; g++) {
+    let b = u.lbox[g]; let by = u.lbox[g + 4u];
     if (p.x < b.x || p.z < b.y || p.x > b.z || p.z > b.w || p.y < by.x || p.y > by.y) { continue; }
     for (var i = 0u; i < 16u; i++) {
       let l = u.lamps[g * 16u + i]; if (l.w == 0.) { break; }
@@ -394,14 +400,20 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
     let rd = i.rv; let above = p.y - ravF(p.z);
     let scr = ss(17., 8., rd + 3. * (m3 - .5)) * ss(22., 6., above);
     al = mix(al, mix(vec3f(.16, .15, .135), vec3f(.31, .29, .26), m3) * (.5 + .7 * vn2(p.xz * 2.3)) * (.8 + .4 * vn2(p.xz * 9.)), scr);
-    let wob = rd + 1.1 * (vn2(p.xz * .15) - .5);
-    let wet = ss(2.7, 1.7, wob) * ss(3., .5, above);
+    let wide = 1. + 1.3 * ss(-140., -230., p.z) + 1.4 * ss(9., 2., abs(p.z + 32.));
+    let wob = (rd + 1.1 * (vn2(p.xz * .15) - .5)) / wide;
+    let wet = ss(2.7, 1.7, wob) * ss(3., .5, above) * ss(.55, .8, normalize(i.n).y);   // water lies on level ground, not down the rock step
     al = mix(al, al * .45, ss(4.5, 2.5, wob) * ss(3., .5, above));
+    // the rock of the falls' step and the pool's sides, dark and streaming wet
+    al = mix(al, al * .3, ss(7., 3., rd) * ss(6., 1., abs(p.z + 39.)) * ss(18., 4., above));
     if (wet > 0.) {
-      let rp = vec2f(vn2(vec2f(p.x * 3., p.z * 1.2 - u.cam.w * 2.)), vn2(vec2f(p.x * 3. + 5., p.z * 1.2 - u.cam.w * 2.))) - .5;
-      let wn = normalize(vec3f(rp.x * .25, 1., rp.y * .25)); let V = normalize(u.cam.xyz - p);
-      let fr = .03 + .97 * pow(1. - max(dot(wn, V), 0.), 5.);
-      let wc = mix(vec3f(.015, .018, .016), skyL(reflect(-V, wn)), fr) + vec3f(.6) * ss(2.4, 2.65, wob) * .5 * vn2(p.xz * 1.3 + u.cam.w * vec2f(0., -1.5));
+      // the burn: broad, slow ripples drawn out along the flow (no fine sparkle), pale streaks of foam riding on it
+      let fz = p.z * .28 + u.cam.w * 1.6;
+      let rp = vec2f(vn2(vec2f(p.x * .9, fz)), vn2(vec2f(p.x * .9 + 5., fz + 3.))) - .5;
+      let wn = normalize(vec3f(rp.x * .14, 1., rp.y * .1)); let V = normalize(u.cam.xyz - p);
+      let fr = .03 + .6 * pow(1. - max(dot(wn, V), 0.), 5.);
+      let streak = ss(.62, .85, vn2(vec2f(p.x * 1.6, p.z * .3 + u.cam.w * 1.4))) * .07;
+      let wc = mix(vec3f(.02, .025, .022), skyL(reflect(-V, wn)) * .8, fr) + (u.amb.rgb + u.sunc.rgb * .3) * (streak + .3 * ss(2.45, 2.7, wob));
       al = mix(al, vec3f(.02), wet); stream = wc * wet; n = normalize(mix(n, vec3f(0., 1., 0.), wet));
     }
   }
@@ -531,7 +543,9 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
     // the moulding falls into shadow toward the glass, so the window sits back in the wall
     let rec = mix(1., .45, ss(.97, .86, r));
     al = mix(st, st * rec * .8, stoneT) ; al = mix(al, vec3f(.03, .035, .045), ins * (1. - stoneT));
-    em = gc * lead * pet * 1.6 * ins * (1. - stoneT) * (.9 + .1 * sin(u.cam.w * 1.3 + hue * 30.)) * u.env.y;
+    let cand = 1. + u.env.x * (.22 * sin(u.cam.w * 6.1 + hue * 9.) * sin(u.cam.w * 2.3 + r * 4.) + .08 * sin(u.cam.w * 13.7 + an * 20.));   // candlelight inside, at night
+    em = gc * lead * pet * 1.6 * ins * (1. - stoneT) * (.9 + .1 * sin(u.cam.w * 1.3 + hue * 30.)) * u.env.y * cand * mix(vec3f(1.), vec3f(.45, .3, .2), u.env.x);
+    em += vec3f(1., .5, .16) * .3 * lead * ins * (1. - stoneT) * u.env.x * u.env.y * cand;
     if (r > .985) { al = st; }
   }
   else if (m == 2u || m == 10u || m == 15u) { let w = windowCol(p, uv, select(1., .0, m == 10u), fwu, m == 15u); al = select(w.rgb, vec3f(.04, .045, .06), w.a > .5); if (w.a > .5) { em = w.rgb; sp = .25; gl = 300.; } }
@@ -566,6 +580,10 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
     al = mix(al, vec3f(.2, .22, .14), ss(.58, .78, fbm(p * .25 + 9., 3)) * .35);
   }
   else if (m == 11u) { al = vec3f(.5, .38, .2) * (.6 + .4 * fbm(p * 4., 2)); } // thatch / straw
+  else if (m == 18u) {
+    // pine canopy: dark blue-green needles in clumps, lighter where the sun catches the top
+    al = mix(vec3f(.03, .06, .04), vec3f(.07, .11, .06), fbm(p * 1.4, 2)) * (.7 + .5 * ss(-.2, .8, n.y));
+  }
   else if (m == 17u) {
     // standing stone: weathered grey rock, crusts of pale lichen, darker where the rain runs
     al = mix(vec3f(.17, .17, .165), vec3f(.29, .285, .27), fbm(p * vec3f(.7, .25, .7), 3)) * (.8 + .3 * fbm(p * 3.3, 2));
@@ -577,7 +595,7 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
   // winter: snow on roofs, sills and wall tops; rain: darker, glossier stone and slate
   let up = normalize(i.n).y * select(-1., 1., dot(normalize(i.n), n) > 0.);
   if ((u.env2.x > 0. || u.env2.z > 0.) && m != 2u && m != 10u && m != 14u && m != 15u && m != 9u && m != 8u) {
-    var sn = 0.; if (u.env2.x > 0.) { sn = u.env2.x * ss(select(.62, .3, m == 1u || m == 4u || m == 11u || m == 3u), select(.85, .5, m == 1u || m == 4u || m == 11u || m == 3u), up + .15 * (vn(p * .9) - .5)); }
+    var sn = 0.; if (u.env2.x > 0.) { sn = u.env2.x * ss(select(.62, .3, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u), select(.85, .5, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u), up + .15 * (vn(p * .9) - .5)); }
     al = mix(al * (1. - .3 * u.env2.z), SNOWC, sn);
     sp = mix(sp + u.env2.z * .4, .25, sn); gl = mix(select(gl, 60., u.env2.z > .3), 20., sn);
   }
@@ -674,14 +692,6 @@ fn waves(p: vec2f, t: f32, fade: f32) -> vec2f {
   g *= ss(0., 1.5, dep) * .7 + .3;
   var rip = fbm2(p.xz * .9 + u.cam.w * vec2f(.3, .2), 2) * .12 * fade;
   // fish rising: now and then a ring spreads where one has taken a fly
-  var fishR = 0.;
-  { let q = p.xz / 22.; let cc = floor(q); let h = h22(cc + 17.);
-    if (h.x > .4) {
-      let per = 6. + h.y * 8.; let t = fract(u.cam.w / per + h.x * 3.);
-      if (t < .45) { let ctr = (cc + .2 + h.yx * .6) * 22.; let r = length(p.xz - ctr); let R = .3 + t * 10.;
-        let k = (1. - t / .45); fishR = (ss(.5, 0., abs(r - R)) + .6 * ss(.4, 0., abs(r - R * .55))) * k;
-        rip += sin((r - R) * 5.) * ss(1.4, 0., abs(r - R)) * k * .16 * fade; }
-    } }
   // rain: rings spreading from drops, one per cell, each at its own moment
   if (u.env3.x > 0. && u.env3.z < .5) {
     let q = p.xz * 1.6; let c = floor(q); let h = h22(c); let f = fract(q) - .5 - (h - .5) * .5;
@@ -706,8 +716,6 @@ fn waves(p: vec2f, t: f32, fade: f32) -> vec2f {
   // the sun's glitter path
   let Hh = normalize(L + V); let sp = pow(max(dot(n, Hh), 0.), mix(180., 1200., fade));
   col += u.sunc.rgb * sp * mix(4., 18., fade) * f * shadowAt(p, vec3f(0., 1., 0.));
-  // the crest of a fish's ring catches the light
-  col += (skyL(reflect(-V, vec3f(0., 1., 0.))) * .35 + u.sunc.rgb * .04) * fishR * fade;
   // foam where the water meets the shore
   let fo = ss(.55, .0, dep + .25 * sin(u.cam.w * .8 + p.x * .3 + p.z * .2)) * ss(.3, .7, fbm2(p.xz * 1.5 + u.cam.w * .1, 3));
   col = mix(col, vec3f(.8) * (u.sunc.rgb * .4 + u.amb.rgb), fo * .7);
@@ -800,6 +808,19 @@ fn cloud(p: vec2f, o: i32) -> f32 {
   c += met * .75;
   // fog veils the sky as well
   c = mix(c, skyL(normalize(vec3f(rd.x, .03, rd.z))), u.env2.w * .85 * ss(-.2, .6, 1. - rd.y));
+  // lightning, in front of the rain's veil: the cloud deck lights up, and a jagged bolt drops from the cloud base to the horizon
+  let fl = u.env4.x;
+  if (fl > 0.) {
+    c += vec3f(.5, .55, .75) * fl * ss(-.05, .25, rd.y) * .3;
+    var a = atan2(rd.z, rd.x) - u.env4.z; a -= 6.2831853 * round(a / 6.2831853);
+    if (abs(a) < .2 && rd.y < .45 && rd.y > -.01) {
+      let s = u.env4.y * 97.; let y = rd.y;
+      let off = (vn2(vec2f(y * 16., s)) - .5) * .12 + (vn2(vec2f(y * 60., s + 5.)) - .5) * .03 + (vn2(vec2f(y * 240., s + 9.)) - .5) * .007;
+      let d = abs(a - off);
+      let br = ss(.004, .001, d) * 30. + exp(-d * 70.) * 1.2;
+      c += vec3f(.85, .88, 1.) * br * ss(.45, .36, y) * ss(-.01, .008, y) * min(fl * 1.6, 1.);
+    }
+  }
   return vec4f(c, 1.);
 }
 `;
@@ -890,12 +911,19 @@ struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n
   var c = a.xyz + vec3f(cos(an) * a.w, sin(an * 2.3 + b.z * 9.) * 5., sin(an) * a.w * .7);
   let bat = b.w < .5; let big = b.w > 1.5;
   if (bat) { c += vec3f(sin(t * 5.1 + b.z * 40.), sin(t * 6.3 + b.z * 20.) * .6, cos(t * 4.7 + b.z * 30.)) * 3.; }
-  let fw = normalize(vec3f(-sin(an) * a.w * b.y, 0., cos(an) * a.w * .7 * b.y));
+  var fw = normalize(vec3f(-sin(an) * a.w * b.y, 0., cos(an) * a.w * .7 * b.y));
+  let goose = a.w < 0.;
+  if (goose) {
+    // geese in autumn: a V of greylags crossing from the north-east to the south-west, one pass every 80 s
+    fw = normalize(vec3f(-.8, 0., .6)); let sd = vec3f(-fw.z, 0., fw.x);
+    c = vec3f(60., 180., -40.) + fw * (fract(t / 80.) * 2800. - 1400.) - fw * a.x + sd * a.y + vec3f(0., a.z + sin(t * .7 + b.z * 9.) * .4, 0.) + sd * sin(t * .5 + b.z * 7.) * .5;
+  }
   let rt = normalize(cross(fw, vec3f(0., 1., 0.)));
   var fl = sin(t * 9. * b.w + b.z * 30.) * .7;
   // big birds glide on a slight dihedral and flap now and then; bats beat their wings fast
   if (big) { fl = .15 + sin(t * 3.2 + b.z * 30.) * .55 * ss(.75, .95, sin(t * .23 + b.z * 11.)); }
   if (bat) { fl = sin(t * 28. + b.z * 30.) * .8; }
+  if (goose) { fl = sin(t * 4.6 + b.z * 2.) * .6; }
   let tri = vi / 3u; let k = vi % 3u; let s = select(-1., 1., tri >= 2u); let outer = (tri & 1u) == 1u;
   let sz = .55 * b.w; var p = vec3f(0.);
   let wa = vec2f(cos(fl), sin(fl)); let wb = vec2f(cos(fl * 1.6), sin(fl * 1.6));
@@ -972,20 +1000,54 @@ const ST = array<vec2f, 4>(vec2f(-1., -1.), vec2f(1., -1.), vec2f(-1., 1.), vec2
 // waterfall: stacked ribbons from the lip to the foot, streaks running down, mist at the bottom
 @vertex fn vsFall(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
   let top = vec3f(${FALLS.slice(0, 3).map((v) => v.toFixed(1)).join(',')}); let bot = vec3f(${FALLS.slice(3).map((v) => v.toFixed(1)).join(',')});
-  let co = ST[vi] * .5 + .5; let k = f32(ii);
-  let w = 7.5 + k * .8; let dir = normalize(vec3f(bot.x - top.x, 0., bot.z - top.z)); let sd = vec3f(-dir.z, 0., dir.x);
+  // a strip of 16 rows from the foot to the lip, so the sheet can curve out over the edge and fall
+  let co = vec2f(f32(vi & 1u), f32(vi >> 1u) / 15.); let k = f32(ii);
+  let dir = normalize(vec3f(bot.x - top.x, 0., bot.z - top.z) + vec3f(0., 0., .001)); let sd = vec3f(-dir.z, 0., dir.x);
   let y = co.y;
-  // arc outward off the lip, then fall
-  let p = mix(bot, top, y) + dir * (3. + (1. - y) * (1. - y) * 4. * (1. + k * .2)) + sd * (co.x - .5) * w * (1. + (1. - y) * .6) + dir * k * .3;
-  var o: VO; o.p = p; o.uv = vec2f(co.x, y); o.k = vec2f(k, 0.); o.pos = u.vp * vec4f(p, 1.); return o;
+  var p: vec3f;
+  if (ii == 5u) {
+    // the mist veil: a broad soft sheet of spray standing in front of the foot of the fall
+    p = bot + sd * (co.x - .5) * 20. + vec3f(0., y * 8. - 1., 0.) + dir * (3. + y * 1.5);
+  } else {
+    let w = 7.5 + k * .8; let fall = 1. - y;
+    // over the lip the water curves out (a parabola), spreading a little as it drops; the foot goes under the pool
+    p = vec3f(top.x, mix(bot.y - .6, top.y + .25, y), top.z) + dir * (.3 + 2.4 * fall * fall * (1. + k * .15) + k * .25) + sd * (co.x - .5) * w * (1. + fall * .5);
+    p.y += (.25 + .45 * sin(co.x * 3.1416) - .3 * fract(sin(k * 12.9) * 43.7)) * ss(.8, 1., y);
+  }
+  var o: VO; o.p = p; o.uv = vec2f(co.x, y); o.k = vec2f(k, select(0., 1., ii == 5u)); o.pos = u.vp * vec4f(p, 1.); return o;
 }
 @fragment fn fsFall(i: VO) -> @location(0) vec4f {
-  let t = u.cam.w;
-  let s = fbm2(vec2f(i.uv.x * 18. + i.k.x * 3., i.uv.y * 3. + t * 2.2), 3);
-  let edge = ss(0., .25, i.uv.x) * ss(1., .75, i.uv.x);
-  var a = ss(.3, .7, s) * edge * (.7 - i.k.x * .1) * ss(1., .95, i.uv.y);
-  a += ss(.25, 0., i.uv.y) * .7 * edge * (.6 + .4 * fbm2(vec2f(i.uv.x * 9., u.cam.w * 1.5), 2));
-  let c = vec3f(.8, .82, .85) * (u.sunc.rgb * .45 + u.amb.rgb);
+  let t = u.cam.w; let mistV = i.k.y > .5;
+  let s = fbm2(vec2f(i.uv.x * 26. + i.k.x * 7., i.uv.y * 3. + t * 2.6), 3);
+  // ragged sides and a lip that is not a ruler line
+  let lip = .95 - .09 * vn2(vec2f(i.uv.x * 7. + i.k.x * 3., 3.)) - .04 * vn2(vec2f(i.uv.x * 23., i.k.x));
+  let edge = ss(0., .2 + .1 * vn2(vec2f(i.uv.y * 6., i.k.x)), i.uv.x) * ss(1., .8 - .1 * vn2(vec2f(i.uv.y * 6. + 4., i.k.x)), i.uv.x);
+  var a = (.72 + .26 * ss(.35, .7, s)) * edge * (.97 - i.k.x * .1) * ss(lip + .03, lip - .03, i.uv.y);
+  // white water churning at the foot
+  let foam = fbm2(vec2f(i.uv.x * 7., t * 1.2 - i.uv.y * 5.), 3);
+  a = max(a, ss(.2 + .12 * foam, 0., i.uv.y) * .9 * edge * ss(.25, .55, foam));
+  // the water: white where it breaks into streaks, glassy and darker where the sheet is thin; lit the same on every ribbon
+  let lw = u.sunc.rgb * .35 + u.amb.rgb * 1.1;
+  var c = mix(vec3f(.32, .36, .38), vec3f(.86, .88, .9), ss(.3, .75, s) * .8 + ss(.3, 0., i.uv.y) * .4) * lw;
+  if (mistV) {
+    let n = fbm2(vec2f(i.uv.x * 3. - t * .15, i.uv.y * 2. - t * .3), 3);
+    a = .34 * ss(0., .35, i.uv.x) * ss(1., .65, i.uv.x) * (1. - i.uv.y) * (1. - i.uv.y) * ss(0., .12, i.uv.y) * (.35 + .65 * n);
+    c = vec3f(.85, .87, .9) * lw;
+  }
+  // a rainbow in the spray: about 42 degrees from the point opposite the sun, red outside, violet inside
+  let rb = u.sun.y > .02 && u.env.z < .5 && u.env.x < .3;
+  if (rb) {
+    let ang = acos(clamp(dot(normalize(i.p - u.cam.xyz), -u.sun.xyz), -1., 1.)) * 57.2958;
+    let t2 = (ang - 40.4) / 2.;
+    if (t2 > 0. && t2 < 1.) {
+      let sp = clamp(vec3f(1.5 - abs(t2 - 1.) * 3., 1.5 - abs(t2 - .55) * 3.2, 1.5 - abs(t2 - .1) * 3.), vec3f(0.), vec3f(1.));
+      // only in the mist veil and the spray at the foot
+      let mist = select(ss(.3, .04, i.uv.y), 1., mistV);
+      let band = ss(0., .2, min(t2, 1. - t2));
+      c = mix(c, c * .5 + sp * u.sunc.rgb * .6, mist * band);
+      a = max(a, select(.25 * edge, .12 * ss(0., .3, i.uv.x) * ss(1., .7, i.uv.x) * ss(1., .2, i.uv.y), mistV) * mist * band);
+    }
+  }
   return vec4f(aerial(c, i.p) * a, a);
 }
 // rowing boats: a ten-triangle hull, bobbing and rolling on the swell
@@ -1075,7 +1137,7 @@ fn H0(p: vec2f) -> f32 { if (abs(p.x) < 1020. && abs(p.y) < 1020.) { let g = vec
 
 // ---------------------------------------------------------------- animals: limbs swing about their pivots, heads dip to graze
 const W_LIFE = S_G + /*wgsl*/`
-struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n: vec3f, @location(2) @interpolate(flat) m: u32, @location(3) ly: f32 };
+struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n: vec3f, @location(2) @interpolate(flat) m: u32, @location(3) ly: f32, @location(4) @interpolate(flat) vr: f32 };
 fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(c * v.x - s * v.y, s * v.x + c * v.y); }
 @vertex fn vs(@location(0) pos: vec3f, @location(1) nm: vec4f, @location(2) uv: vec2f, @location(3) ia: vec4f, @location(4) ib: vec4f) -> VO {
   let limb = floor(uv.x / 10.); let piv = vec2f(uv.x - limb * 10. - 2., uv.y);
@@ -1096,6 +1158,17 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
     let d = rz(vec2f(q.x - piv.x, q.z - piv.y), a); let rr2 = length(d);
     q = vec3f(d.x + piv.x, q.y + max(cos(ph), 0.) * .12 * rr2, d.y + piv.y);
     let nn = rz(n.xz, a); n = vec3f(nn.x, n.y, nn.y);
+  } else if (limb == 12.) {
+    // small animals bound: the whole body lifts and drops with each hop
+    q.y += abs(sin(ph)) * .14 * min(walk, 2.);
+  } else if (limb == 13.) {
+    // the squirrel's tail flicks
+    let a = sin(u.cam.w * 5. + ia.x * 3.) * .3;
+    q = vec3f(piv + rz(q.xy - piv, a), q.z); n = vec3f(rz(n.xy, a), n.z);
+  } else if (limb == 14.) {
+    // the mill wheel turns with the water
+    let a = -u.cam.w * .55;
+    q = vec3f(rz(q.xy, a), q.z); n = vec3f(rz(n.xy, a), n.z);
   } else if (limb == 10.) {
     // the rower leans back on the pull, forward on the recovery
     let a = sin(ph) * .35;
@@ -1109,13 +1182,13 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
   q.y += abs(sin(ph)) * .06 * max(walk - 1., 0.);   // a bound at the gallop
   let c = cos(ia.w); let s = sin(ia.w);
   let w = vec3f(c * q.x - s * q.z, q.y, s * q.x + c * q.z) * ib.x;
-  var o: VO; o.p = ia.xyz + w; o.n = vec3f(c * n.x - s * n.z, n.y, s * n.x + c * n.z); o.m = u32(round(nm.w * 127.)); o.ly = pos.y;
+  var o: VO; o.p = ia.xyz + w; o.n = vec3f(c * n.x - s * n.z, n.y, s * n.x + c * n.z); o.m = u32(round(nm.w * 127.)); o.ly = pos.y; o.vr = fract(ib.x * 100. + .001);
   o.pos = u.vp * vec4f(o.p, 1.); return o;
 }
 @fragment fn fs(i: VO) -> @location(0) vec4f {
   var n = normalize(i.n); if (dot(n, u.cam.xyz - i.p) < 0.) { n = -n; }
   let g = fbm(i.p * 9., 2);
-  var al = vec3f(.3); var sp = .05;
+  var al = vec3f(.3); var sp = .05; var em = vec3f(0.);
   switch i.m {
     case 30u: {
       // red deer: a darker back, a pale tawny belly, legs greying toward the hoof
@@ -1140,10 +1213,19 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
     case 45u: { al = vec3f(.55, .4, .32); }
     case 46u: { al = mix(vec3f(.42, .44, .46), vec3f(.62, .63, .64), ss(1.1, 1.3, i.ly)) * (.85 + .25 * g); }
     case 47u: { al = vec3f(.4, .33, .16); }
+    case 48u: {
+      // a coat: one of four colours, picked per person
+      let v = i.vr; al = select(select(select(vec3f(.12, .15, .09), vec3f(.22, .14, .08), v > .2), vec3f(.11, .13, .19), v > .45), vec3f(.28, .09, .07), v > .7) * (.8 + .3 * g);
+    }
+    case 49u: { let hair = fbm(i.p * vec3f(14., 4., 14.), 2); al = mix(vec3f(.36, .16, .06), vec3f(.55, .3, .12), hair) * (.75 + .35 * g); }
+    case 50u: { al = vec3f(.12, .08, .07); }
+    case 51u: { al = mix(vec3f(.3, .24, .17), vec3f(.4, .33, .24), g); }
+    case 52u: { al = vec3f(.42, .16, .06) * (.8 + .35 * g); }
+    case 16u: { al = vec3f(.05); em = vec3f(1., .62, .26) * 16. * ss(.08, .45, u.env.x) * (.85 + .15 * sin(u.cam.w * 11. + i.p.x)); }
     default: { al = vec3f(.04, .18, .1); sp = .4; }
   }
   let sh = shadowAt(i.p, n);
-  let c = lit(al, n, i.p, sh, select(mix(.6, 1., ss(0., .9, i.ly)), 1., i.m >= 38u), sp, 20.);
+  let c = lit(al, n, i.p, sh, select(mix(.6, 1., ss(0., .9, i.ly)), 1., i.m >= 38u), sp, 20.) + em;
   clipW(i.p);
   return vec4f(aerial(c, i.p), 1.);
 }

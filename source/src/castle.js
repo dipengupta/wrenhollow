@@ -3,7 +3,7 @@
 // ============================================================================
 // Materials (vertex w): 0 ashlar, 1 slate, 2 lit window, 3 timber, 4 copper, 5 dressed trim, 6 lead/iron,
 // 7 plaster, 8 greenhouse glass, 9 clock face, 10 dark window, 11 thatch, 12 paving, 13 rubble, 14 rose window,
-// 15 traceried window, 16 lantern glass, 17 standing stone
+// 15 traceried window, 16 lantern glass, 17 standing stone, 18 pine canopy
 // Colliders: towers are vertical cylinders, everything else oriented boxes. The camera is kept out of both.
 const COLC = [], COLB = []; // [x, z, r, ytop] ; [cx, cz, ex, ez, half len, half wid, y0, y1]
 const OBJS = []; // [first index, index count, minx, miny, minz, maxx, maxy, maxz] per culling object
@@ -83,12 +83,14 @@ function buildCastle() {
     const g = o.base ?? groundMin(x, z, r), top = y0 + h;
     prism(x, z, rr0 * 1.12, rr0 * 1.04, max(g, -2), y0, n, 13, rot); prism(x, z, rr0 * 1.04, rr0, y0, y0 + 2, n, 0, rot);
     prism(x, z, rr0, rr0, y0 + 2, top, n, 0, rot);
+    // a lantern room: a ring of tall lit windows just under the roof, one per face
+    if (o.lantern) for (let i = 0; i < n; i++) { const a = rot + (i + 0.5) * TAU / n, rw = rr0 * cos(PI / n); win(x + cos(a) * rw, top - 9, z + sin(a) * rw, cos(a), sin(a), 2 * rw * sin(PI / n) * 0.62, 6.5, true, 15); }
     // string courses
-    for (let y = y0 + 9; y < top - 4; y += 9 + floor(rnd() * 3)) if (!o.clock || y < top - 2 * r * 0.62 - 3) prism(x, z, rr0 + 0.18, rr0 + 0.18, y, y + 0.45, n, 5, rot);
+    for (let y = y0 + 9; y < top - 4; y += 9 + floor(rnd() * 3)) if ((!o.clock || y < top - 2 * r * 0.62 - 3) && (!o.lantern || y < top - 11 || y > top - 2)) prism(x, z, rr0 + 0.18, rr0 + 0.18, y, y + 0.45, n, 5, rot);
     // windows: one per face per floor on narrow faces, offset floor to floor
     const nw = n === 4 ? 4 : min(n, r > 6 ? 10 : r > 4 ? 6 : 4), ww = min(1.5, r * 0.36);
     for (let y = y0 + 4, f = 0; y < top - 4; y += 6.5, f++) for (let i = 0; i < nw; i++) {
-      if (rnd() < 0.18 || (o.clock && y > top - 2 * r * 0.62 - 5)) continue;
+      if (rnd() < 0.18 || (o.clock && y > top - 2 * r * 0.62 - 5) || (o.lantern && y > top - 13)) continue;
       const a = n === 4 ? rot + PI / 4 + i * PI / 2 : rot + (i + (f & 1) * 0.5) * TAU / nw + PI / n, rw = n === 4 ? r : rr0 * cos(PI / n);
       if (n === 4) for (const s of [-0.45, 0.45]) win(x + cos(a) * rw - sin(a) * s * r, y, z + sin(a) * rw + cos(a) * s * r, cos(a), sin(a), ww * 0.8, 2.6);
       else win(x + cos(a) * rw, y, z + sin(a) * rw, cos(a), sin(a), ww, 2.7);
@@ -133,6 +135,7 @@ function buildCastle() {
         spire(dx, dz, 0.9, y + 1.6, 2.2, 4, mat, a + PI / 4); finial(dx, dz, y + 3.8, 0.8);
       }
       finial(x, z, y1 + rh, max(2, r * 0.4));
+      if (goth && rh > 22 && rnd() < 0.5) BANS.push(x, y1 + rh + max(2, r * 0.4) * 0.9, z, rnd());   // a pennant on the tallest spires
       if (goth) for (let i = 0; i < n; i++) { const a = rot + i * TAU / n, d = R, qx = x + cos(a) * d, qz = z + sin(a) * d; box(qx, qz, cos(a), sin(a), 0.32, 0.32, top + 0.6, y1 + 3, 5, -1); spire(qx, qz, 0.46, y1 + 3, 3.4, 4, 5, a + PI / 4); }
       else if (r > 3.8) for (let i = 0; i < (n === 4 ? 4 : 6); i++) { const a = rot + (i + 0.5) * TAU / (n === 4 ? 4 : 6) + (n === 4 ? PI / 4 : 0), d = R + 0.1, qx = x + cos(a) * d, qz = z + sin(a) * d; box(qx, qz, cos(a), sin(a), 0.35, 0.35, top + 0.6, top + 2.6, 5, -1); spire(qx, qz, 0.5, top + 2.6, 2.6, 4, 1, a + PI / 4); }
       COLC.push([x, z, R * 0.55, top + 1 + rh * 0.6]);
@@ -220,7 +223,7 @@ function buildCastle() {
       }
     }
     // ridge cresting and chimneys
-    for (let i = 0; i < nb; i += 3) { const t = -hl + (i + 0.5) * bl; if (rnd() < 0.5 && !o.great) box(cx + ex * t + px * hw * 0.3, cz + ez * t + pz * hw * 0.3, ex, ez, 0.6, 0.6, top + rh * 0.5, top + rh + 2, 0, 6); }
+    for (let i = 0; i < nb; i += 3) { const t = -hl + (i + 0.5) * bl; if (rnd() < 0.5 && !o.great) { const sx = cx + ex * t + px * hw * 0.3, sz = cz + ez * t + pz * hw * 0.3; box(sx, sz, ex, ez, 0.6, 0.6, top + rh * 0.5, top + rh + 2, 0, 6); if (VSMOKE.length < 30 && rnd() < 0.5) VSMOKE.push(sx, top + rh + 2.1, sz); } }
     if (o.fleche) { const fx = cx, fz = cz; prism(fx, fz, 1.6, 1.6, top + rh - 1, top + rh + 4, 8, 3); spire(fx, fz, 2, top + rh + 4, 10, 8, o.cu ? 4 : 1); finial(fx, fz, top + rh + 14, 2); }
     end();
   };
@@ -253,7 +256,7 @@ function buildCastle() {
   // the keep: the central mass
   hallL(-28, -6, 24, -6, 27, T, 40, { turrets: true, rh: 18, fly: true });
   // the observatory: the tallest landmark
-  towerL(34, 28, T, 10, 118, { rh: 3.4 });
+  towerL(34, 28, T, 10, 118, { rh: 3.4, lantern: true });
   towerL(22, 38, T, 4, 58, { rh: 3.4 });
   // clock tower on the north side of the upper ward
   towerL(-36, -42, T, 7.5, 54, { n: 4, roof: 'pyr', clock: true, rh: 2.6 });
@@ -322,7 +325,8 @@ function buildCastle() {
     }
     box(x, (z0 + z1) / 2, 0, 1, (z0 - z1) / 2, hw + 0.3, deck - 1.2, deck, 5, 12);
     for (const sd of [-1, 1]) box(x + sd * (hw - 0.2), (z0 + z1) / 2, 0, 1, (z0 - z1) / 2, 0.3, deck, deck + 1.1, 5);
-    COLB.push([x, (z0 + z1) / 2, 0, 1, (z0 - z1) / 2, hw + 1, -50, deck]);
+    COLB.push([x, (z0 + z1) / 2, 0, 1, (z0 - z1) / 2, hw + 1, deck - 7.5, deck]);
+    for (let i = 0; i <= n; i++) { const zp = z0 - i * s; COLB.push([x, zp, 0, 1, 2.2, hw + 1, H(x, zp) - 4, deck - 6]); }
   }
   end();
   // a lodge on the north hill where the viaduct lands
@@ -342,6 +346,16 @@ function buildCastle() {
     const x0 = 164, x1 = 240, z = -86, y = C, hw = 2.6, n = 26, piers = [182, 200, 218];
     for (const px of piers) { let g = 1e9; for (const a of [-2.2, 2.2]) for (const b of [-3.2, 3.2]) g = min(g, H(px + a, z + b) - 3); COLB.push([px, z, 1, 0, 2.2, hw + 0.6, g, y]); box(px, z, 1, 0, 3.4, hw + 1.8, g - 2, g + 5, 13, 12); box(px, z, 1, 0, 2.2, hw + 0.6, g, y - 0.6, 0, 5); box(px, z, 1, 0, 1.6, hw + 0.2, g, y - 8, 5, -1); }
     box((x0 + x1) / 2, z, 1, 0, (x1 - x0) / 2, hw, y - 0.6, y, 3, 3);
+    // where the ground falls away under an end before the first pier, a battered masonry abutment carries the deck
+    for (const [xe, dir] of [[x0, 1], [x1, -1]]) {
+      let xa = xe; while (H(xa - dir, z) < y - 1 && abs(xa - xe) < 12) xa -= dir;         // back to solid ground
+      if (H(xe + dir * 2, z) > y - 1.5) continue;
+      const xb = xe + dir * 7, cx = (xa + xb) / 2, hl = abs(xb - xa) / 2 + 1;
+      let g = 1e9; for (let t = 0; t <= 1; t += 0.1) for (const b of [-4, 4]) g = min(g, H(xa + (xb - xa) * t, z + b));
+      for (let k = 0; k < 3; k++) { const yb = g - 2 + (y - g) * k / 3, yt = g - 2 + (y - g) * (k + 1) / 3 - 0.6 * (k === 2 ? 1 : 0), wk = hw + 1.6 - k * 0.45;
+        box(cx + dir * k * 0.6, z, 1, 0, hl - k * 0.6, wk, yb, yt, 13, -1); box(cx + dir * k * 0.6, z, 1, 0, hl - k * 0.6 + 0.15, wk + 0.15, yt - 0.45, yt, 5, -1); }
+      COLB.push([cx, z, 1, 0, hl + 0.4, hw + 2, g - 2, y - 0.6]);
+    }
     for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n; for (const s of [-1, 1]) box(x, z + s * hw, 1, 0, 0.14, 0.14, y, y + 3.4, 3); }
     for (const s of [-1, 1]) { box((x0 + x1) / 2, z + s * hw, 1, 0, (x1 - x0) / 2, 0.1, y, y + 1.3, 3); box((x0 + x1) / 2, z + s * hw, 1, 0, (x1 - x0) / 2, 0.1, y + 2.3, y + 3.5, 3); }
     for (const xe of [x0, x1]) m.quad([xe, y + 3.4, z - hw - 0.6], [xe, y + 3.4, z + hw + 0.6], [xe, y + 5.4, z], [xe, y + 5.4, z], 3, 0, 0, 7, 0, 3.5, 2, 3.5, 2);
@@ -369,13 +383,11 @@ function buildCastle() {
   hall(-140, 124, -112, 130, 8, B, 10, { pinn: false });
 
   {
-    let x = -150, z = 70; const dx = -0.86, dz = 0.5;
-    while (H(x, z) > B - 3 && x > -260) { x += dx; z += dz; }
-    FALLS[0] = x - dx * 1.5; FALLS[1] = B - 2.5; FALLS[2] = z - dz * 1.5;
-    let fx = x, fz = z; while (H(fx, fz) > 0.5 && fx > -300) { fx += dx; fz += dz; }
-    FALLS[3] = fx + dx * 2; FALLS[4] = 0; FALLS[5] = fz + dz * 2;
-    // the stream that feeds it: a channel cut across the terrace
-    box(x - dx * 10, z - dz * 10, dx, dz, 9, 1.6, B - 2.5, B - 0.3, 13, 12);
+    // Wren Falls: the burn in Corrie Gorge drops over a rock step (RAVSTEP) into a pool. The lip and the foot are
+    // the lowest points across the gorge just above and below the step.
+    const low = (z) => { let bx = 200, by = 1e9; for (let x = 150; x <= 250; x += 0.5) { const h = H(x, z); if (h < by) { by = h; bx = x; } } return [bx, by]; };
+    const [lx, ly] = low(RAVSTEP - 2.5), [fx, fy] = low(RAVSTEP + 5);
+    FALLS[0] = lx; FALLS[1] = ly + 0.3; FALLS[2] = RAVSTEP - 1; FALLS[3] = fx; FALLS[4] = fy + 0.2; FALLS[5] = RAVSTEP + 4;
   }
   // ---- south bastion over the water, with a greenhouse range on it
   const D = 48;
@@ -493,14 +505,10 @@ function buildCastle() {
       end(); OBJS[OBJS.length - 1].wall = true;
     }
   }
-  // the Grey Stones: a ring of standing stones on the open hill east of the loch, one great recumbent stone
-  begin();
-  {
-    const cx = 640, cz = 262; rseed(77);
-    for (let i = 0; i < 11; i++) {
-      const a = i / 11 * TAU + rr(-0.1, 0.1), r = 11 + rr(-0.8, 0.8), x = cx + cos(a) * r, z = cz + sin(a) * r, g = H(x, z) - 0.6, h = rr(2.2, 3.8);
-      const tx = -sin(a), tz = cos(a), w = rr(0.55, 0.85), d = rr(0.3, 0.45), lx = rr(-0.3, 0.3), lz = rr(-0.2, 0.2);
-      // rings of seven points up the stone, each a little wider or narrower, the whole leaning; the top rounded and uneven
+  // a rough standing stone: rings of seven points up the stone, each a little wider or narrower, the whole leaning; the
+  // top rounded and uneven. a: the angle it faces (its broad side across it), h height, w half width, d half depth
+  const menhir = (x, z, a, h, w, d, sink = 0.6) => {
+      const g = H(x, z) - sink, tx = -sin(a), tz = cos(a), lx = rr(-0.3, 0.3) * h / 3, lz = rr(-0.2, 0.2) * h / 3;
       const NR = 5, NP = 7, ring = [];
       for (let k = 0; k <= NR; k++) {
         const f = k / NR, sh = 1 - 0.35 * f * f, y = g + h * (k === NR ? 0.96 + rr(-0.06, 0.06) : f), pts = [];
@@ -510,8 +518,133 @@ function buildCastle() {
       for (let k = 0; k < NR; k++) for (let j = 0; j < NP; j++) { const j1 = (j + 1) % NP, A = ring[k][j], B = ring[k][j1], C2 = ring[k + 1][j1], D2 = ring[k + 1][j]; m.quad(A, B, C2, D2, 17, j, A[1], j + 1, B[1], j + 1, C2[1], j, D2[1]); }
       const top = ring[NR], tc = [top.reduce((s, p) => s + p[0], 0) / NP, top[0][1] + 0.12, top.reduce((s, p) => s + p[2], 0) / NP];
       for (let j = 0; j < NP; j++) m.quad(top[j], top[(j + 1) % NP], tc, tc, 17, 0, 0, 1, 0, 0.5, 1, 0.5, 1);
-    }
+    };
+  // the Grey Stones: a ring of standing stones on the open hill east of the loch, one great recumbent stone
+  begin();
+  {
+    const cx = 640, cz = 262; rseed(77);
+    for (let i = 0; i < 11; i++) { const a = i / 11 * TAU + rr(-0.1, 0.1), r = 11 + rr(-0.8, 0.8); menhir(cx + cos(a) * r, cz + sin(a) * r, a, rr(2.2, 3.8), rr(0.55, 0.85), rr(0.3, 0.45)); }
     box(cx + 10.5, cz + 2, 0.2, 0.98, 2, 0.7, H(cx + 10.5, cz + 2) - 0.4, H(cx + 10.5, cz + 2) + 1.3, 17);
+  }
+  end();
+  // a blob of geometry: an ellipsoid in rings (for the old pine's crown)
+  const blob = (cx, cy, cz, rx, ry, rz, mat, sg = 9, rg = 5) => {
+    m.grow(sg * (rg + 1), sg * rg * 6); const b0 = m.nv;
+    for (let j = 0; j <= rg; j++) for (let i = 0; i < sg; i++) { const th = j / rg * PI, ph = i / sg * TAU, x = sin(th) * cos(ph), y = cos(th), z = sin(th) * sin(ph), w = rr(0.85, 1.12); m.vert(cx + x * rx * w, cy + y * ry * w, cz + z * rz * w, x, y + 0.4, z, mat, ph, j / rg); }
+    for (let j = 0; j < rg; j++) for (let i = 0; i < sg; i++) { const a = b0 + j * sg + i, b = b0 + j * sg + (i + 1) % sg; m.tri(a, b + sg, b); m.tri(a, a + sg, b + sg); }
+  };
+  // a tapering tube between two points (branches, the pine's trunk)
+  const limb = (A, B, r0, r1, mat, n = 7) => {
+    const d = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], l = hypot(...d), f = d.map((v) => v / l);
+    const up = abs(f[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    let e1 = [up[1] * f[2] - up[2] * f[1], up[2] * f[0] - up[0] * f[2], up[0] * f[1] - up[1] * f[0]]; const el = hypot(...e1); e1 = e1.map((v) => v / el);
+    const e2 = [f[1] * e1[2] - f[2] * e1[1], f[2] * e1[0] - f[0] * e1[2], f[0] * e1[1] - f[1] * e1[0]];
+    const P = (C, r, a) => [C[0] + (e1[0] * cos(a) + e2[0] * sin(a)) * r, C[1] + (e1[1] * cos(a) + e2[1] * sin(a)) * r, C[2] + (e1[2] * cos(a) + e2[2] * sin(a)) * r];
+    for (let i = 0; i < n; i++) { const a0 = i / n * TAU, a1 = (i + 1) / n * TAU; m.quad(P(A, r0, a0), P(A, r0, a1), P(B, r1, a1), P(B, r1, a0), mat, i, 0, i + 1, 0, i + 1, l, i, l); const k = m.nv - 4, cx = (A[0] + B[0]) / 2, cy = (A[1] + B[1]) / 2, cz = (A[2] + B[2]) / 2, q = P([cx, cy, cz], 1, (a0 + a1) / 2); if (m.b[k * 24 + 12] * (q[0] - cx) + m.b[k * 24 + 13] * (q[1] - cy) + m.b[k * 24 + 14] * (q[2] - cz) < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(k + j) * 24 + 12 + c] *= -1; }
+  };
+  // Dun Corran: an Iron Age broch on the slope north-west of Gate Lodge. A round, tapering drystone tower with a
+  // hollow core, its wall broken down on the south side, and a low doorway facing the glen.
+  begin();
+  {
+    // the wall batters inward in a gentle curve (wide foot, slimmer top); its top is ragged, and on the south it has
+    // fallen to a low stump; small flat stones (uv scaled so the coursing reads as drystone, not brick)
+    const cx = -300, cz = -560, g = H(cx, cz) - 1.2, N = 44, HT = 13, SC = 2.4;
+    const ro = (y) => { const t = clamp((y - g) / HT, 0, 1); return 10.5 - 3.2 * t + 0.9 * t * t; }, ri = (y) => 5.8 - (y - g) * 0.03;
+    rseed(95); const jag = Array.from({ length: N + 1 }, () => rr(-0.9, 0.5)); jag[N] = jag[0];
+    const height = (i) => { const a = i / N * TAU, br = sstep(0.75, 0.0, abs(((a - 1.9 + PI) % TAU + TAU) % TAU - PI)); return HT - (HT - 3.2) * br + jag[i] * (1 + 2 * br); };
+    for (let i = 0; i < N; i++) {
+      const a0 = i / N * TAU, a1 = (i + 1) / N * TAU, h0 = g + height(i), h1 = g + height(i + 1), door = abs(((a0 - 4.4 + PI) % TAU + TAU) % TAU - PI) < 0.1, yb = door ? g + 3.4 : g;
+      const P = (a, r, y) => [cx + cos(a) * r, y, cz + sin(a) * r];
+      // the outer face in two bands, so the curve of the batter shows
+      const ym0 = (yb + h0) / 2, ym1 = (yb + h1) / 2;
+      m.quad(P(a0, ro(yb), yb), P(a0, ro(ym0), ym0), P(a1, ro(ym1), ym1), P(a1, ro(yb), yb), 13, a0 * 10 * SC, yb * SC, a0 * 10 * SC, ym0 * SC, a1 * 10 * SC, ym1 * SC, a1 * 10 * SC, yb * SC);
+      m.quad(P(a0, ro(ym0), ym0), P(a0, ro(h0), h0), P(a1, ro(h1), h1), P(a1, ro(ym1), ym1), 13, a0 * 10 * SC, ym0 * SC, a0 * 10 * SC, h0 * SC, a1 * 10 * SC, h1 * SC, a1 * 10 * SC, ym1 * SC);
+      m.quad(P(a1, ri(yb), yb), P(a1, ri(h1), h1), P(a0, ri(h0), h0), P(a0, ri(yb), yb), 13, a1 * 6 * SC, yb * SC, a1 * 6 * SC, h1 * SC, a0 * 6 * SC, h0 * SC, a0 * 6 * SC, yb * SC);
+      m.quad(P(a0, ri(h0), h0), P(a0, ro(h0), h0), P(a1, ro(h1), h1), P(a1, ri(h1), h1), 13, a0 * 10 * SC, 0, a0 * 10 * SC, 4 * SC, a1 * 10 * SC, 4 * SC, a1 * 10 * SC, 0);
+    }
+    // the door's lintel, and fallen stone heaped against the broken side
+    { const a = 4.4, r = (ro(g) + ri(g)) / 2; box(cx + cos(a) * r, cz + sin(a) * r, cos(a), sin(a), (ro(g) - ri(g)) / 2 + 0.3, 0.9, g + 3.3, g + 3.9, 17, 17); }
+    for (let i = 0; i < 26; i++) { const a = 1.9 + rr(-0.9, 0.9), r = rr(9.5, 15) - abs(a - 1.9) * 2, x = cx + cos(a) * r, z = cz + sin(a) * r, gy = H(x, z); box(x, z, cos(a + i), sin(a + i), rr(0.3, 0.7), rr(0.25, 0.5), gy - 0.2, gy + rr(0.15, 0.5), 13, 13); }
+    COLC.push([cx, cz, 10.6, g + HT]);
+  }
+  end();
+  // Ardlach: a roofless croft cottage below the broch: low walls, one gable still standing, a fallen lintel
+  begin();
+  {
+    const x = -232, z = -492, ex = 0.94, ez = 0.34, px = -ez, pz = ex, hl = 5.5, hw = 2.8, g = H(x, z) - 0.6, wh = 1.9;
+    for (const s of [-1, 1]) box(x + px * hw * s, z + pz * hw * s, ex, ez, hl, 0.4, g, g + wh - (s > 0 ? 0.6 : 0), 13, 13);
+    box(x - ex * hl, z - ez * hl, px, pz, hw + 0.4, 0.4, g, g + wh, 13, 13);
+    // the standing gable, with an empty window
+    const gx = x + ex * hl, gz = z + ez * hl;
+    box(gx, gz, px, pz, hw + 0.4, 0.4, g, g + wh + 0.3, 13, -1);
+    for (const o of [-0.4, 0.4]) m.quad([gx - px * (hw + 0.4) + ex * o, g + wh + 0.3, gz - pz * (hw + 0.4) + ez * o], [gx + px * (hw + 0.4) + ex * o, g + wh + 0.3, gz + pz * (hw + 0.4) + ez * o], [gx + ex * o, g + wh + 2.8, gz + ez * o], [gx + ex * o, g + wh + 2.8, gz + ez * o], 13, 0, g + wh, 6.4, g + wh, 3.2, g + wh + 2.5, 3.2, g + wh + 2.5);
+    // the doorway's fallen lintel and tumbled stones
+    box(x + px * (hw + 1.4) + ex * 1.5, z + pz * (hw + 1.4) + ez * 1.5, ex, ez, 0.9, 0.22, H(x + px * (hw + 1.4), z + pz * (hw + 1.4)) - 0.1, H(x + px * (hw + 1.4), z + pz * (hw + 1.4)) + 0.25, 17, 17);
+    rseed(91); for (let i = 0; i < 9; i++) { const a = rr(0, TAU), r = rr(hw, hw + 3), sx = x + cos(a) * r * 1.6, sz = z + sin(a) * r, gy = H(sx, sz); box(sx, sz, cos(a), sin(a), rr(0.25, 0.5), rr(0.2, 0.35), gy - 0.15, gy + rr(0.2, 0.4), 13, 13); }
+    COLB.push([x, z, ex, ez, hl + 0.5, hw + 0.6, g, g + wh + 2.6]);
+  }
+  end();
+  // the Cairn of Keld: a grassed burial mound by the Grey Stones (the mound is in the terrain), and its stone-lined
+  // entrance passage facing the ring
+  begin();
+  {
+    const cx = 675, cz = 242, dx = (640 - cx) / hypot(640 - cx, 262 - cz), dz = (262 - cz) / hypot(640 - cx, 262 - cz), px = -dz, pz = dx, ea = atan2(dz, dx);
+    rseed(97);
+    // a kerb of big stones set on edge round the foot of the mound, broken only by the entrance
+    for (let i = 0; i < 30; i++) { const a = i / 30 * TAU; let da = a - ea; da -= TAU * Math.round(da / TAU); if (abs(da) < 0.16) continue; const r = 13.2, x = cx + cos(a) * r, z = cz + sin(a) * r; menhir(x, z, a, rr(0.7, 1.2), rr(0.45, 0.7), rr(0.2, 0.3), 0.3); }
+    // the entrance: two lines of uprights under capstones, running into the mound, and a tall portal stone either side
+    for (let k = 0; k < 4; k++) for (const s of [-1, 1]) { const x = cx + dx * (13.6 - k * 1.5) + px * 1.0 * s, z = cz + dz * (13.6 - k * 1.5) + pz * 1.0 * s; menhir(x, z, ea + PI / 2, 1.9, 0.65, 0.26, 0.4); }
+    for (let k = 0; k < 3; k++) { const x = cx + dx * (13.4 - k * 1.6), z = cz + dz * (13.4 - k * 1.6), gy = H(x, z) - 0.4; blob(x, gy + 1.75, z, 0.9 + 0.7 * abs(px), 0.28, 0.9 + 0.7 * abs(pz), 17, 8, 3); }
+    for (const s of [-1, 1]) { const x = cx + dx * 14.2 + px * 2.4 * s, z = cz + dz * 14.2 + pz * 2.4 * s; menhir(x, z, ea, 2.8, 0.55, 0.35, 0.4); }
+  }
+  end();
+  // the Old Pine: one ancient Scots pine near the Grey Stones, a tall bare red trunk and a flat, wind-shaped crown
+  begin();
+  {
+    // the trunk leans a little and thins; heavy limbs leave it high up, each reaching out and up to a flat pad of
+    // needles; the topmost pad is broadest, so the crown reads flat and wind-shaped
+    const x = 612, z = 238, g = H(x, z) - 0.4; rseed(93);
+    const T0 = [x, g, z], T1 = [x + 0.25, g + 5.5, z + 0.15], T2 = [x + 0.7, g + 10.5, z + 0.35];
+    limb(T0, T1, 0.85, 0.6, 3, 9); limb(T1, T2, 0.6, 0.36, 3, 9);
+    for (let k = 0; k < 5; k++) {
+      const a = k / 5 * TAU + rr(-0.35, 0.35), h = 6.8 + k * 0.75, f = (h - 5.5) / 5, S = [mix(T1[0], T2[0], f), g + h, mix(T1[2], T2[2], f)];
+      const r = rr(2.6, 4.2), M = [S[0] + cos(a) * r * 0.55, S[1] + 0.9, S[2] + sin(a) * r * 0.55], E = [S[0] + cos(a) * r, S[1] + 1.6 + rr(0, 0.6), S[2] + sin(a) * r];
+      limb(S, M, 0.24, 0.17, 3, 6); limb(M, E, 0.17, 0.09, 3, 5);
+      blob(E[0], E[1] + 0.35, E[2], rr(2, 2.6), rr(0.55, 0.75), rr(1.8, 2.4), 18, 10, 4);
+    }
+    // two dead stubs lower down, and the crown's top pad
+    for (const a of [1.1, 3.9]) limb([x + 0.1, g + 4 + a * 0.3, z], [x + cos(a) * 1.3, g + 4.6 + a * 0.3, z + sin(a) * 1.3], 0.12, 0.05, 3, 5);
+    blob(T2[0], T2[1] + 1.1, T2[2], 3.2, 0.85, 2.9, 18, 11, 4);
+    COLC.push([x, z, 1.2, g + 10], [T2[0], T2[2], 6, T2[1] + 3]);
+  }
+  end();
+  // the Glen Mill: a stone mill house on the east bank of the burn, a lade carrying water to the top of its wheel
+  begin();
+  {
+    const x = 210, z = -285, ex = 0, ez = 1, px = -1, pz = 0, hl = 4.5, hw = 3.2, y0 = H(x, z), wh = 5;
+    box(x, z, ex, ez, hl, hw, y0 - 2, y0 + wh, 7, -1);
+    const rh = 3.6;
+    for (const s of [-1, 1]) {
+      const A = [x - ex * (hl + 0.4) + px * (hw + 0.5) * s, y0 + wh - 0.2, z - ez * (hl + 0.4) + pz * (hw + 0.5) * s], Bq = [x + ex * (hl + 0.4) + px * (hw + 0.5) * s, y0 + wh - 0.2, z + ez * (hl + 0.4) + pz * (hw + 0.5) * s];
+      const Cq = [x + ex * (hl + 0.4), y0 + wh + rh, z + ez * (hl + 0.4)], Dq = [x - ex * (hl + 0.4), y0 + wh + rh, z - ez * (hl + 0.4)];
+      m.quad(A, Bq, Cq, Dq, 1, 0, 0, 2 * hl, 0, 2 * hl, 3, 0, 3);
+      const k = m.nv - 4; if (m.b[k * 24 + 12] * px * s + m.b[k * 24 + 14] * pz * s < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(k + j) * 24 + 12 + c] *= -1;
+      const gx = x + ex * hl * s, gz = z + ez * hl * s;
+      m.quad([gx - px * (hw + 0.5), y0 + wh - 0.2, gz - pz * (hw + 0.5)], [gx + px * (hw + 0.5), y0 + wh - 0.2, gz + pz * (hw + 0.5)], [gx, y0 + wh + rh, gz], [gx, y0 + wh + rh, gz], 7, 0, y0 + wh, 2 * hw, y0 + wh, hw, y0 + wh + rh, hw, y0 + wh + rh);
+      win(x + px * hw * s, y0 + 1.4, z, px * s, pz * s, 1, 1.5, rnd() < 0.7);
+    }
+    win(x + ex * hl, y0 + 1, z, ex, ez, 1.1, 2.1, false);
+    box(x - ex * hl * 0.5, z - ez * hl * 0.5, ex, ez, 0.5, 0.5, y0 + wh, y0 + wh + rh + 1.2, 0, 6); VSMOKE.push(x - ex * hl * 0.5, y0 + wh + rh + 1.3, z - ez * hl * 0.5);
+    COLB.push([x, z, ex, ez, hl + 0.5, hw + 0.6, y0 - 2, y0 + wh + rh]);
+    // the lade: a timber trough on posts, from upstream to the top of the wheel
+    // the wheel turns between the house's west wall and the burn, its foot in a stone-lined pit; the lade ends right
+    // over the top of the wheel
+    const wx = 204, gw = H(wx, -285), wy = gw + 1.9, top = wy + 2.75;
+    box(wx, -295.4, 0, 1, 9.8, 0.45, top - 0.35, top, 3, 3); for (const s of [-1, 1]) box(wx + s * 0.45, -295.4, 0, 1, 9.8, 0.06, top, top + 0.45, 3, 3);
+    for (let k = 0; k < 4; k++) { const zz = -289.5 - k * 4.5; box(wx, zz, 1, 0, 0.12, 0.12, H(wx, zz) - 0.5, top - 0.35, 3, 3); }
+    box(wx - 1.05, -285, 0, 1, 2.9, 0.25, gw - 0.8, gw + 0.5, 13, 13);                                   // the pit's outer wall
+    box(wx, -285, 0, 1, 2.9, 0.75, gw - 0.75, gw - 0.6, 13, 13);                                          // and its floor, below the paddles
+    MILLW[0] = wx; MILLW[1] = wy; MILLW[2] = -285;
   }
   end();
   // the village church
@@ -521,5 +654,7 @@ function buildCastle() {
 }
 const VSMOKE = []; // chimney tops in the village
 const LAMPS = []; // lanterns: x, y, z, group (0 lane, 1 viaduct, 2 the rest)
+const MILLW = [197.6, 22, -285]; // the mill wheel's axle
 const BANS = []; // banner poles: x, top y, z, seed
-const FALLS = [-171, 43, 86, -177, 0, 93]; // waterfall lip and foot
+const FALLS = [200, 16, -41, 199, 4, -36]; // waterfall lip and foot (set from the height field)
+const RAVSTEP = -40; // where the burn drops over the step in Corrie Gorge (z)

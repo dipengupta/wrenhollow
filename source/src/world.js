@@ -96,6 +96,7 @@ function makeTrees() {
 }
 
 // rooks: flocks circling the towers; each instance is a bird with its own orbit
+let NGOOSE0 = 0;
 function makeBirds() {
   rseed(9);
   const a = [];
@@ -108,5 +109,8 @@ function makeBirds() {
   a.push(-20, 128, 0, 70, 2, -0.16, 0.7, 1.7);
   // bats at dusk and night (size < 0.5: they flit)
   for (let i = 0; i < 24; i++) a.push(rr(-60, 60), rr(90, 120), rr(-40, 60), rr(15, 40), rnd() * TAU, rr(0.5, 0.9) * (rnd() < .5 ? -1 : 1), rnd(), rr(0.3, 0.4));
+  // geese in autumn: a V of 15 (back, side, height offsets from the leader; radius -1 marks them)
+  NGOOSE0 = a.length / 8;
+  for (let i = 0; i < 15; i++) { const row = (i + 1) >> 1, s = i & 1 ? 1 : -1; a.push(row * 3.4 + rr(-0.4, 0.4), s * row * 2.6 * (i ? 1 : 0), rr(-0.4, 0.4), -1, 0, 0, rnd(), 1.6); }
   return new Float32Array(a);
 }

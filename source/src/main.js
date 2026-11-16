@@ -33,7 +33,7 @@ const tex = (w, h, format, usage, o = {}) => device.createTexture({ size: [w, h]
 
 // ---------------------------------------------------------------- light: the sun (or the moon), set from the time of day in env.js
 const SUN = [0, 1, 0], SUNC = [0, 0, 0], AMB = [0, 0, 0];
-let EXPO = 1, RAYS = 0.55;
+let EXPO = 1, RAYS = 0.55, FLASH = 0, DEVFLASH = -1, LSTRIKE = 0, LNEXT = 5, STRIKES = 0;
 // the sunlight that survives the atmosphere along direction d
 const sunColor = (d) => {
   const RE = 6360e3, BR = [5.8e-6, 13.5e-6, 33.1e-6], BM = 3.2e-5 * 1.11, BO = [0.65e-6, 1.881e-6, 0.085e-6]; let r = 0, m = 0, o = 0;
@@ -57,8 +57,8 @@ const tShadow = tex(SHADOW, SHADOW, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BIN
 const tDummy = tex(1, 1, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tDummyC = tex(1, 1, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tSky = tex(512, 256, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
-const UB = new Float32Array(292), UBR = new Float32Array(292), UBS = new Float32Array(292);
-const ubo = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST });
+const UB = new Float32Array(368), UBR = new Float32Array(368), UBS = new Float32Array(368);
+const ubo = device.createBuffer({ size: 1472, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 1472, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 1472, usage: BU.UNIFORM | BU.COPY_DST });
 const bHC = device.createBuffer({ size: CN * CN * 4, usage: BU.STORAGE | BU.COPY_SRC }), bHF = device.createBuffer({ size: FN * FN * 4, usage: BU.STORAGE | BU.COPY_SRC });
 
 const VF = SS.VERTEX | SS.FRAGMENT;
@@ -187,8 +187,12 @@ const ibLifeI = device.createBuffer({ size: LIFEMAX * 32, usage: BU.VERTEX | BU.
 function drawLife(r, pl) {
   if (!LN) return;
   r.setPipeline(pl); r.setVertexBuffer(0, vbLife); r.setVertexBuffer(1, ibLifeI); r.setIndexBuffer(ibLife, 'uint32');
-  const eagle = TOD[tod].night < 0.3 && WEATHER[weather].precip < 0.5;
-  for (let k = 0; k < LRUN.length; k++) { const [s0, n] = LRUN[k]; if (n && (k !== KIND.EAGLE || eagle)) r.drawIndexed(LM.runs[k][1], n, LM.runs[k][0], 0, s0); }
+  const nt = TOD[tod].night, eagle = nt < 0.3 && WEATHER[weather].precip < 0.5;
+  for (let k = 0; k < LRUN.length; k++) {
+    const [s0, n] = LRUN[k];
+    if (!n || (k === KIND.EAGLE && !eagle) || (k === KIND.VILLAGER && nt > 0.5) || (k === KIND.BEARER && nt < 0.25)) continue;
+    r.drawIndexed(LM.runs[k][1], n, LM.runs[k][0], 0, s0);
+  }
 }
 
 // terrain index buffer: for each level of detail a grid of (n+1)^2 vertices plus four skirts of n+1 (see W_TERR)
@@ -247,11 +251,11 @@ function lightUB() {
     for (let g = 0; g < 3; g++) {
       let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y0 = 1e9, y1 = -1e9, k = 0;
       for (let i = 0; i < LAMPS.length; i += 4) if (LAMPS[i + 3] === g && k < 16) {
-        const o = 100 + (g * 16 + k++) * 4; u[o] = LAMPS[i]; u[o + 1] = LAMPS[i + 1]; u[o + 2] = LAMPS[i + 2]; u[o + 3] = 1;
+        const o = 112 + (g * 16 + k++) * 4; u[o] = LAMPS[i]; u[o + 1] = LAMPS[i + 1]; u[o + 2] = LAMPS[i + 2]; u[o + 3] = 1;
         x0 = min(x0, LAMPS[i] - 10); z0 = min(z0, LAMPS[i + 2] - 10); x1 = max(x1, LAMPS[i] + 10); z1 = max(z1, LAMPS[i + 2] + 10);
         y0 = min(y0, LAMPS[i + 1] - 10); y1 = max(y1, LAMPS[i + 1] + 10);
       }
-      u[76 + g * 4] = x0; u[77 + g * 4] = z0; u[78 + g * 4] = x1; u[79 + g * 4] = z1; u[88 + g * 4] = y0; u[89 + g * 4] = y1;
+      u[80 + g * 4] = x0; u[81 + g * 4] = z0; u[82 + g * 4] = x1; u[83 + g * 4] = z1; u[96 + g * 4] = y0; u[97 + g * 4] = y1;
     }
   }
 }
@@ -488,6 +492,18 @@ function drawTrees(r, pl, refl) {
   }
 }
 function render() {
+  // the lantern-bearers' lanterns: lamp group 3, rewritten every frame
+  { let x0 = 1e9, z0 = 1e9, y0 = 1e9, x1 = -1e9, z1 = -1e9, y1 = -1e9;
+    for (let k = 0; k < 6; k++) { const o = 112 + (48 + k) * 4; UB[o] = DL[k * 4]; UB[o + 1] = DL[k * 4 + 1]; UB[o + 2] = DL[k * 4 + 2]; UB[o + 3] = DL[k * 4 + 3];
+      if (DL[k * 4 + 3]) { x0 = min(x0, DL[k * 4] - 10); x1 = max(x1, DL[k * 4] + 10); z0 = min(z0, DL[k * 4 + 2] - 10); z1 = max(z1, DL[k * 4 + 2] + 10); y0 = min(y0, DL[k * 4 + 1] - 10); y1 = max(y1, DL[k * 4 + 1] + 10); } }
+    UB[92] = x0; UB[93] = z0; UB[94] = x1; UB[95] = z1; UB[108] = y0; UB[109] = y1; }
+  // lightning in rain (not snow): a strike every 8 to 20 s, a bright flash and a weaker second flicker
+  if (DEVFLASH >= 0) FLASH = DEVFLASH;
+  else if (WEATHER[weather].precip > 0.5 && SEASON[season].snow < 0.5) {
+    if (F[TIME] > LNEXT || F[TIME] < LSTRIKE) { LSTRIKE = F[TIME]; LNEXT = F[TIME] + rr(8, 20); UB[77] = UBR[77] = rnd(); UB[78] = UBR[78] = atan2(F[FZ], F[FX]) + rr(-0.9, 0.9); STRIKES++; }
+    const s = F[TIME] - LSTRIKE; FLASH = s < 0.05 ? s / 0.05 : exp(-(s - 0.05) * 14) + (s > 0.22 ? 0.75 * exp(-(s - 0.22) * 6) : 0);
+  } else FLASH = 0;
+  UB[76] = UBR[76] = FLASH;
   camUB(UB, false); Q.writeBuffer(ubo, 0, UB);
   // the reflection stays on for a second after the water was last in view, so it does not flicker on and off at the edge
   if (waterInView()) wetUntil = F[TIME] + 1;
@@ -497,7 +513,7 @@ function render() {
   { const sf = SUN[0] * F[FX] + SUN[1] * F[FY] + SUN[2] * F[FZ]; const asp = W / H2;
     RS[0] = 0.5 + 0.5 * (SUN[0] * F[RX] + SUN[2] * F[RZ]) / max(sf, 0.05) / (TANH * asp); RS[1] = 0.5 - 0.5 * (SUN[0] * F[UX] + SUN[1] * F[UY] + SUN[2] * F[UZ]) / max(sf, 0.05) / TANH;
     RS[2] = sf > 0 ? RAYS * sstep(0, 0.35, sf) : 0; RS[3] = asp; Q.writeBuffer(uboRays, 0, RS); }
-  PP[0] = EXPO; PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; PP[4] = TOD[tod].grade; PP[5] = TOD[tod].night; Q.writeBuffer(uboPost, 0, PP);
+  PP[0] = EXPO * (1 + 0.55 * FLASH); PP[1] = W; PP[2] = H2; PP[3] = F[TIME]; PP[4] = TOD[tod].grade; PP[5] = TOD[tod].night; Q.writeBuffer(uboPost, 0, PP);
 
   const e = device.createCommandEncoder();
   let slot = null;
@@ -524,9 +540,10 @@ function render() {
     r.setPipeline(P.bird); r.setVertexBuffer(0, ibBirds);
     if (nt < 0.5 && !wet) r.draw(18, NROOK);
     if (nt > 0.5) r.draw(18, 1, 0, NROOK + 1);   // the owl (slot NROOK is unused: the eagle is drawn with the animals)
-    if (nt > 0.2 && !wet && !cold) r.draw(18, nBird - NROOK - 2, 0, NROOK + 2); }
+    if (nt > 0.2 && !wet && !cold) r.draw(18, NGOOSE0 - NROOK - 2, 0, NROOK + 2);
+    if (SEASON[season].phase === 2 && nt < 0.6 && !wet) r.draw(18, 15, 0, NGOOSE0); }
   if (!(DBG & 32)) { r.setPipeline(P.sky); r.draw(3); }
-  r.setPipeline(P.fall); r.draw(4, NFALL);
+  r.setPipeline(P.fall); r.draw(32, NFALL + 1);   // the ribbons, then the mist veil at the foot
   r.setPipeline(P.smoke); r.draw(4, NSMOKE);
   r.setPipeline(P.fly); r.draw(4, NFLY);
   if (!(DBG & 64)) {

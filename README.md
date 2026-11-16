@@ -56,35 +56,41 @@ It needs a browser with **WebGPU**.
 - **Time**: dawn, morning, afternoon, golden hour, dusk, and a moonlit night
 - **Season**: spring (fresh green, gorse in flower), summer (heather in bloom), autumn (golden birches, rust bracken,
   falling leaves), winter (snow on the hills, roofs and pines, ice along the loch, bare birches)
-- **Weather**: clear, cloudy, rain (with rings on the loch) and fog; in winter the rain falls as snow
+- **Weather**: clear, cloudy, rain (with rings on the loch, lightning and thunder) and fog; in winter the rain falls
+  as snow
 
 The choices are kept in the address, so a look can be shared:
 [`?time=night&season=winter`](https://dipengupta.github.io/wrenhollow/?time=night&season=winter),
 [`?time=dawn&weather=fog`](https://dipengupta.github.io/wrenhollow/?time=dawn&weather=fog),
 [`?season=autumn&weather=rain`](https://dipengupta.github.io/wrenhollow/?season=autumn&weather=rain).
 
-The ground, the walls and the towers are solid. You can fly through the covered bridge and under its arches.
+The ground, the walls and the towers are solid. You can fly through the covered bridge, under its arches and through
+the arches of the Long Viaduct.
 
 ## What's there
 
 - **The castle**: about fifty towers, most of them octagonal with pinnacled parapets and needle spires, buttressed
   halls with traceried lancet windows, a great hall with rose windows and flying buttresses, a chapel, a clock tower, an observatory tower, courtyards, curtain walls with crenellations,
-  buildings stepping down the crag, banners on the flat-topped towers
-- **The loch**: planar reflections, ripples, a glittering sun path, shoreline foam, a waterfall, a boathouse with a
-  cliff stair, rowing boats
-- **The land**: a covered timber bridge over a rocky gorge, a multi-arch viaduct, a village with smoking chimneys and a
-  church, about 90,000 pines and birches, heather, bracken, rock faces, snow-capped mountains
+  buildings stepping down the crag, banners on the flat-topped towers and pennants on the tallest spires, a lantern
+  room glowing at the top of Starwatch at night, candlelight in the rose window
+- **The loch**: planar reflections, ripples, a glittering sun path, shoreline foam, a boathouse with a cliff stair,
+  rowing boats
+- **The land**: a covered timber bridge over a rocky gorge with a waterfall (and a rainbow in its spray on sunny
+  days), a multi-arch viaduct, a village with smoking chimneys and a church, a water mill with a turning wheel, an
+  Iron Age broch and a ruined croft, a chambered cairn and an ancient Scots pine beside a stone circle, about 90,000
+  pines and birches, heather, bracken, rock faces, snow-capped mountains
 - **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
   night stars, shooting stars, a band of the galaxy and the moon with its path on the loch; the northern lights on
   clear winter nights
-- **Places**: the map names seventeen of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
-  Kilwren, the island of Inchkeld and the Grey Stones. `?place=starwatch` in the address starts the flight there.
-- **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, fish rising on the loch,
-  herds of red deer that bolt when you fly too close, sheep on the village pastures, swans and ducks on
-  the loch, a golden eagle circling the crag, rooks by day, an owl and bats at night, fireflies on summer evenings,
-  lanterns along the viaduct, the bridge and the village lane, chimney smoke
-- **Sound**: wind that rises with height, speed and the weather, rain, lapping water, the Bell Tower striking the
-  hours, rooks by day and an owl at night
+- **Places**: the map names twenty-two of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
+  Kilwren, the island of Inchkeld, Dun Corran and the Grey Stones. `?place=starwatch` in the address starts the flight there.
+- **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, herds of red deer that bolt
+  when you fly too close, highland cattle, sheep on the village pastures, rabbits and red squirrels, swans and ducks on
+  the loch, geese flying over in autumn, a golden eagle circling the crag, rooks by day, an owl and bats at night,
+  fireflies on summer evenings, villagers walking the lane by day, lantern-bearers crossing the viaduct and the bridge
+  after dark, lanterns along the viaduct, the bridge and the village lane, chimney smoke
+- **Sound**: wind that rises with height, speed and the weather, rain and thunder, lapping water, the waterfall and
+  the mill race, the Bell Tower striking the hours, rooks by day and an owl at night, geese and cattle
 
 ## How it works
 
@@ -118,7 +124,7 @@ node shots.mjs bench   # runs the 60 s benchmark flight and prints frame and GPU
 | [`source/src/audio.js`](source/src/audio.js) | The soundscape |
 | [`source/src/quality.js`](source/src/quality.js) | Detail levels |
 | [`source/src/env.js`](source/src/env.js) | Times of day, seasons and weather |
-| [`source/src/life.js`](source/src/life.js) | The animals: their meshes and how they behave |
+| [`source/src/life.js`](source/src/life.js) | The animals and people: their meshes and how they behave |
 | [`source/src/math.js`](source/src/math.js) | Noise, random numbers, the terrain grid and the mesh builder |
 | [`source/template.html`](source/template.html) | The page: loading bar, menu and styles |
 | [`source/fonts/`](source/fonts) | The menu typeface (Cinzel, subset to Latin), inlined into the page at build time |
