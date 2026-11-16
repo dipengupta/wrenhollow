@@ -175,7 +175,9 @@ struct U {
   cam: vec4f, sun: vec4f, scr: vec4f, rt: vec4f, up: vec4f, fw: vec4f, sunc: vec4f, amb: vec4f,
   env: vec4f,  // night 0..1, window glow, cloud cover, grade
   env2: vec4f, // seasons: snow, foliage, wet, fog
-  env3: vec4f, // weather: precipitation, wind, -, -
+  env3: vec4f, // weather: precipitation, wind, snow (not rain), clock hour
+  lbox: array<vec4f, 6>,   // lantern groups: min x, min z, max x, max z; then min y, max y, -, -
+  lamps: array<vec4f, 48>, // lanterns: position, 1 (0 = unused slot)
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var sRep: sampler;
@@ -247,6 +249,22 @@ fn lit(al: vec3f, n: vec3f, p: vec3f, sh: f32, ao: f32, sp: f32, gl: f32) -> vec
     c += skyL(reflect(-V, n)) * f * sp * ao * .6;
   }
   return c;
+}
+// warm pools of light from the lanterns, from dusk; only for pixels inside a group's box
+fn lampLight(p: vec3f, n: vec3f) -> vec3f {
+  let on = ss(.08, .45, u.env.x);
+  if (on <= 0.01 || u.sun.w > .5 || distance(p, u.cam.xyz) > 300.) { return vec3f(0.); }
+  var c = 0.;
+  for (var g = 0u; g < 3u; g++) {
+    let b = u.lbox[g]; let by = u.lbox[g + 3u];
+    if (p.x < b.x || p.z < b.y || p.x > b.z || p.z > b.w || p.y < by.x || p.y > by.y) { continue; }
+    for (var i = 0u; i < 16u; i++) {
+      let l = u.lamps[g * 16u + i]; if (l.w == 0.) { break; }
+      let d = l.xyz - p; let r2 = dot(d, d);
+      if (r2 < 100.) { let r = sqrt(r2); let f = 1. - r * .1; c += max(dot(n, d / r) * .8 + .2, 0.) * f * f / (r2 + .4); }
+    }
+  }
+  return vec3f(1., .62, .26) * c * on * 5.;
 }
 fn bump(n: vec3f, p: vec3f, h: f32) -> vec3f {
   let dpx = dpdxFine(p); let dpy = dpdyFine(p); let dhx = dpdxFine(h); let dhy = dpdyFine(h);
@@ -325,7 +343,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
       let ly = fract(bed); lyS = ly;
       rfb = fbm(p * vec3f(.3, .55, .3), 3);
       var r = rfb * 1.4 + .45 * ss(.05, .55, ly) * ss(1., .6, ly);
-      let cl = 1. - ss(15., 70., d);
+      let cl = 1. - ss(12., 45., d);
       if (cl > 0.) {
         // joints: mostly vertical fractures, broken where the bedding changes
         crk = ss(.82, .97, 1. - abs(vn(p * vec3f(.45, .09, .45) + 7.) * 2. - 1.));
@@ -335,6 +353,9 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
       bh = mix(bh, r, rf);
     }
     bh *= 1. - ss(80., 450., d); }
+  // the far hills: gullies and spurs in the bump, so they are not smooth domes
+  let hf = ss(900., 1400., d);
+  if (FAR && u.sun.w < .5) { bh += hf * (vn2(p.xz * .0035) * 14. - 5. * pow(1. - abs(vn2(p.xz * .0075 + 3.) * 2. - 1.), 2.)); }
   let nb = bump(n, p, bh);
   if (u.sun.w < .5) { n = nb; }
   let sl = 1. - n.y;
@@ -352,7 +373,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   al = mix(al, al * vec3f(.85, 1.2, .75), spr);
   if (spr > 0.) {
     al = mix(al, vec3f(.5, .4, .04), ss(.74, .82, vn2(p.xz * .06 + 5.) * .7 + m3 * .3) * spr * ss(.05, .25, 1. - n.y) * .8); // gorse in flower
-    al = mix(al, vec3f(.17, .16, .42), ss(.68, .8, vn2(p.xz * .035 + 11.) * .75 + m3 * .25) * spr * ss(60., 15., p.y) * .7);     // bluebells
+    al = mix(al, vec3f(.24, .22, .5), ss(.66, .78, vn2(p.xz * .035 + 11.) * .75 + m3 * .25) * ss(.35, .7, vn2(p.xz * 1.9) * .6 + vn2(p.xz * .4) * .4) * spr * ss(60., 15., p.y) * .55); // bluebells
   }
   al = mix(al, mix(vec3f(.2, .16, .07), vec3f(.27, .2, .08), m2), aut * .65);
   al = mix(al, vec3f(.2, .18, .12) * (.8 + .4 * m2), wtr);
@@ -390,8 +411,9 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   // the winter snow lies on everything that is not too steep, deepest in the hollows
   var snowL = 0.; if (u.env2.x > 0.) { snowL = u.env2.x * ss(.62, .82, i.sl * -1. + 1. + .18 * (m3 - .5) + .12 * (vn2(p.xz * .25) - .5)) * ss(-1., 1.5, p.y); }
   var snowR = 0.; if (u.env2.x > 0.) {
-    var ledge = 0.; if (lyS >= 0.) { ledge = ss(.6, .7, lyS) * ss(.8, .72, lyS) * ss(.45, .65, vn2(vec2f(p.x + p.z, p.y * 2.5) * .12 + 4.)) * .7; }
-    snowR = u.env2.x * rk * max(ss(.55, .8, normalize(i.n).y + .2 * (m3 - .5)), ledge + ss(.45, .75, n.y) * .45);
+    var ledge = 0.; if (lyS >= 0.) { let wv = vn2(vec2f(p.x + p.z, p.y * 2.5) * .05 + 4.); ledge = ss(.58 + .08 * wv, .68, lyS) * ss(.82 - .1 * wv, .7, lyS) * ss(.35, .6, wv) * .8; }
+    let clump = ss(.45, .7, n.y + .35 * (vn2(p.xz * .3 + p.y * .2) - .5)) * ss(.3, .6, vn2(vec2f(p.x + p.z, p.y) * .08 + 2.));
+    snowR = u.env2.x * rk * max(ss(.55, .8, normalize(i.n).y + .2 * (m3 - .5)), max(ledge * .35, clump * .9));
   }
   let snowT = max(max(snow, snowL), snowR);
   al = mix(al, SNOWC * (.92 + .1 * m3), snowT);
@@ -403,7 +425,8 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   let ao = mix(.7, 1., ss(-5., 30., p.y));
   // grass scatters light: a wrapped response (the normal leans toward the sun) keeps grazing light from picking out facets
   let nl = normalize(n + u.sun.xyz * .45 * ss(.4, .05, u.sun.y) * (1. - rk) * (1. - snowT));
-  var c = lit(al, nl, p, sh, ao, snowT * .3 + shore * .2, 20.) + stream;
+  var c = lit(al, nl, p, sh, ao, shore * .2 * (1. - snowT), 20.) + stream;
+  if (u.env.x > .05) { c += al * lampLight(p, nG); }
   clipW(p);
   return vec4f(aerial(c, p), 1.);
 }
@@ -520,13 +543,24 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
   else if (m == 7u) { al = vec3f(.62, .58, .52) * (.8 + .25 * fbm(p * 1.7, 3)); al *= mix(.7, 1., ss(-1., 2., uv.y)); }
   else if (m == 8u) { al = vec3f(.08, .1, .1); sp = 1.; gl = 200.; em = vec3f(.2, .35, .15) * .25; }
   else if (m == 9u) {
-    // clock face
-    let c = uv * 2. - 1.; let r = length(c); al = vec3f(.85, .8, .65);
-    let an = atan2(c.x, c.y); let tick = ss(.06, .02, abs(fract(an / TAU * 12. + .5) - .5)) * ss(.75, .8, r);
-    let t = u.cam.w * .01; let h1 = abs(dot(c, vec2f(cos(t), -sin(t)))); let h2 = abs(dot(c, vec2f(cos(t * 12.), -sin(t * 12.))));
-    let hand = max(ss(.05, .02, h1) * ss(.55, .5, r) * select(0., 1., dot(c, vec2f(sin(t), cos(t))) > 0.), ss(.035, .015, h2) * ss(.8, .75, r) * select(0., 1., dot(c, vec2f(sin(t * 12.), cos(t * 12.))) > 0.));
-    al = mix(al, vec3f(.05), max(tick, hand)) * select(1., .2, r > .95);
-    em = al * vec3f(1., .8, .55) * 1.4 * u.env.y;
+    // the clock: an ivory dial in a stone surround and an iron bezel, hour marks, and hands that keep the time of day
+    // (the face's u runs right to left as seen from outside, so x is mirrored)
+    let c = vec2f(1. - uv.x * 2., uv.y * 2. - 1.); let r = length(c); let fr = length(fwu) * 2. + 1e-3;
+    let an = atan2(c.x, c.y) / TAU;                                                   // clockwise from twelve
+    let hrs = u.env3.w + u.cam.w / 3600.; let mins = fract(hrs) * 60. + 0.;
+    let ah = hrs / 12. * TAU; let am = mins / 60. * TAU;
+    al = mix(vec3f(.86, .82, .7), vec3f(.78, .72, .58), ss(.3, .9, r)) * (.92 + .1 * fbm(p * 4., 2));
+    let mk = ss(.05 + fr, .02, abs(fract(an * 12. + .5) - .5) * r * 6.3) * ss(.66, .7, r) * ss(.88, .85, r);
+    let mm = ss(.02 + fr, .008, abs(fract(an * 60. + .5) - .5) * r * 6.3 / 5.) * ss(.8, .82, r) * ss(.88, .86, r);
+    let dh = vec2f(sin(ah), cos(ah)); let dm = vec2f(sin(am), cos(am));
+    let hh = ss(.04 + fr * .5, .035, abs(dot(c, vec2f(dh.y, -dh.x)))) * ss(.5, .46, dot(c, dh)) * ss(-.12, -.08, dot(c, dh));
+    let hm = ss(.026 + fr * .5, .021, abs(dot(c, vec2f(dm.y, -dm.x)))) * ss(.78, .74, dot(c, dm)) * ss(-.15, -.1, dot(c, dm));
+    let boss = ss(.07, .05, r);
+    al = mix(al, vec3f(.05, .045, .04), max(max(mk, mm), max(max(hh, hm), boss)));
+    em = al * vec3f(1., .8, .55) * 1.2 * u.env.y * ss(.97, .94, r);
+    let bez = ss(.89, .9, r) * ss(.99, .97, r);
+    al = mix(al, vec3f(.07, .065, .06), bez); em *= 1. - bez;
+    sp = select(.05, .4, bez > .5); gl = 40.;
   }
   else if (m == 13u) {
     let a = ashlar(uv * vec2f(.8, 1.1) + vec2f(0., fbm(p * .3, 2) * .3), 1.4, .7);
@@ -544,8 +578,9 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
     sp = mix(sp + u.env2.z * .4, .25, sn); gl = mix(select(gl, 60., u.env2.z > .3), 20., sn);
   }
   let sh = shadowAt(p, n);
-  let ao = select(mix(.55, 1., ss(-1., 6., uv.y)), 1., m == 14u) * select(1., .8, m == 1u);
+  let ao = select(mix(.55, 1., ss(-1., 6., uv.y)), 1., m == 14u || m == 9u) * select(1., .8, m == 1u);
   var c = lit(al, n, p, sh, ao, sp, gl) + em;
+  if (u.env.x > .05) { c += al * lampLight(p, n); }
   clipW(p);
   return vec4f(aerial(c, p), 1.);
 }
@@ -1031,15 +1066,25 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
   let g = fbm(i.p * 9., 2);
   var al = vec3f(.3); var sp = .05;
   switch i.m {
-    case 30u: { al = mix(vec3f(.21, .13, .08), vec3f(.15, .095, .06), ss(.8, 1.2, i.ly)) * (.85 + .3 * g); al = mix(al, al * vec3f(1.1, .9, .8), u.env2.x); }
+    case 30u: {
+      // red deer: a darker back, a pale tawny belly, legs greying toward the hoof
+      al = mix(vec3f(.24, .15, .09), vec3f(.15, .095, .06), ss(1.05, 1.3, i.ly));
+      al = mix(al, vec3f(.36, .28, .19), ss(.92, .78, i.ly) * ss(.55, .7, i.ly));
+      al = mix(al, vec3f(.13, .11, .09), ss(.55, .3, i.ly));
+      al *= .85 + .3 * g; al = mix(al, al * vec3f(1.1, .9, .8), u.env2.x);
+    }
     case 31u: { al = vec3f(.22, .18, .13); }
     case 32u: { al = vec3f(.6, .56, .48) * (.75 + .45 * g); }
     case 33u: { al = vec3f(.07, .06, .055); }
-    case 34u: { al = vec3f(.82, .82, .8) * (.9 + .15 * g); sp = .2; }
+    case 34u: { al = vec3f(.82, .82, .8) * (.86 + .2 * g) * mix(.82, 1., ss(.05, .3, i.ly)); sp = .2; }
     case 35u: { al = vec3f(.75, .3, .05); }
     case 36u: { al = vec3f(.3, .22, .14) * (.8 + .4 * g); }
     case 38u: { al = vec3f(.15, .09, .045) * (.8 + .4 * g); }
-    case 39u: { al = vec3f(.42, .3, .14) * (.85 + .3 * g); }
+    case 39u: { al = vec3f(.24, .155, .075) * (.8 + .4 * g); }
+    case 40u: { al = mix(vec3f(.17, .055, .04), vec3f(.15, .12, .09), ss(.55, .8, fbm(i.p * 3., 2))) * (.85 + .3 * ss(.0, .06, abs(fract(i.ly * 9.) - .5))); sp = .15; }
+    case 41u: { al = vec3f(.2, .13, .07) * (.75 + .3 * g) * (.8 + .2 * ss(.0, .05, abs(fract(i.ly * 7.) - .5))); }
+    case 42u: { al = vec3f(.42, .3, .14) * (.85 + .3 * g); }
+    case 43u: { al = vec3f(.3, .29, .27) * (.85 + .25 * g); }
     default: { al = vec3f(.04, .18, .1); sp = .4; }
   }
   let sh = shadowAt(i.p, n);

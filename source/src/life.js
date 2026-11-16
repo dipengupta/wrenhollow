@@ -4,9 +4,10 @@
 // Meshes face +x with their feet at y = 0 and are animated in the vertex shader (W_LIFE): uv.x = limb * 10 + pivot x + 2,
 // uv.y = pivot y. Limbs: 0 body, 1-4 legs (front left, front right, back left, back right), 5 head and neck.
 // Materials: 30 deer coat, 31 antler and hoof, 32 wool, 33 dark face and legs, 34 swan white, 35 bill, 36 duck brown,
-// 37 duck green head, 38 eagle plumage, 39 eagle head (pale gold). Limbs 6 and 7 are the wings (they roll about
+// 37 duck green head, 38 eagle plumage, 39 eagle coverts, 40 boat paint, 41 boat timber, 42 eagle head (pale gold),
+// 43 duck grey flank. Limbs 6 and 7 are the wings (they roll about
 // the body's axis, pivot z in place of pivot x). A small simulation moves them (lifeTick); its output is one preallocated instance array.
-const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5 };
+const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5, BOAT: 6 };
 function lifeMeshes() {
   const m = new Mesh(), runs = [];
   const L = (limb, px, py) => [limb * 10 + px + 2, py];
@@ -50,8 +51,8 @@ function lifeMeshes() {
     for (const z of [-1, 1]) ell(0.87 * s, 1.72 * s, z * 0.09 * s, 0.04, 0.09, 0.03, 30, hd);
     if (stag) for (const z of [-1, 1]) {
       const b = [0.9 * s, 1.68 * s, z * 0.07], t = [0.78 * s, 2.25 * s, z * 0.32];
-      seg(b, t, 0.035, 0.018, 31, hd, 5);
-      for (const f of [0.3, 0.55, 0.8]) { const p = [b[0] + (t[0] - b[0]) * f, b[1] + (t[1] - b[1]) * f, b[2] + (t[2] - b[2]) * f]; seg(p, [p[0] + 0.18, p[1] + 0.16, p[2] + z * 0.04], 0.02, 0.01, 31, hd, 4); }
+      seg(b, t, 0.05, 0.022, 31, hd, 6);
+      for (const f of [0.3, 0.55, 0.8]) { const p = [b[0] + (t[0] - b[0]) * f, b[1] + (t[1] - b[1]) * f, b[2] + (t[2] - b[2]) * f]; seg(p, [p[0] + 0.18, p[1] + 0.16, p[2] + z * 0.04], 0.028, 0.012, 31, hd, 5); }
     }
     let k = 1;
     for (const front of [true, false]) for (const z of [0.12, -0.12]) {
@@ -72,34 +73,62 @@ function lifeMeshes() {
     ell(0.55, 0.8, 0, 0.17, 0.12, 0.1, 33, hd); ell(0.47, 0.88, 0, 0.12, 0.1, 0.12, 32, hd);
     for (const z of [-1, 1]) ell(0.5, 0.86, z * 0.12, 0.08, 0.025, 0.04, 33, hd);
     let k = 1;
-    for (const x of [0.3, -0.3]) for (const z of [0.15, -0.15]) seg([x, 0.5, z], [x, 0, z], 0.05, 0.035, 33, L(k++, x, 0.5));
+    for (const x of [0.3, -0.3]) for (const z of [0.15, -0.15]) { const lb = L(k++, x, 0.5), kx = x + (x > 0 ? 0.03 : -0.05); seg([x, 0.52, z], [kx, 0.26, z], 0.07, 0.045, 33, lb); seg([kx, 0.26, z], [x, 0, z], 0.04, 0.035, 33, lb); }
   });
   // mute swan: a long body sitting low in the water, an S-shaped neck, an orange bill
   run(() => {
     ell(0, 0.12, 0, 0.55, 0.2, 0.28, 34, L(0, 0, 0), 12, 7); ell(-0.38, 0.22, 0, 0.22, 0.15, 0.2, 34);
+    for (const z of [-1, 1]) ell(-0.12, 0.24, z * 0.15, 0.42, 0.12, 0.11, 34);
     const hd = L(5, 0.35, 0.25);
     seg([0.35, 0.22, 0], [0.48, 0.6, 0], 0.08, 0.06, 34, hd); seg([0.48, 0.6, 0], [0.5, 0.88, 0], 0.06, 0.05, 34, hd);
     ell(0.56, 0.92, 0, 0.09, 0.055, 0.05, 34, hd); ell(0.67, 0.9, 0, 0.07, 0.022, 0.028, 35, hd);
   });
   // mallard
   run(() => {
-    ell(0, 0.07, 0, 0.24, 0.1, 0.12, 36, L(0, 0, 0), 8, 5); ell(-0.2, 0.12, 0, 0.08, 0.05, 0.06, 36);
+    ell(-0.02, 0.07, 0, 0.23, 0.1, 0.12, 43, L(0, 0, 0), 8, 5); ell(0.13, 0.1, 0, 0.11, 0.09, 0.1, 36); ell(-0.22, 0.12, 0, 0.07, 0.05, 0.05, 33);
+    ell(0.16, 0.16, 0, 0.045, 0.02, 0.045, 34);
     const hd = L(5, 0.15, 0.12);
     seg([0.15, 0.12, 0], [0.2, 0.24, 0], 0.05, 0.04, 37, hd); ell(0.23, 0.27, 0, 0.065, 0.055, 0.05, 37, hd); ell(0.31, 0.26, 0, 0.05, 0.015, 0.025, 35, hd);
   });
-  // golden eagle: a solid body, a pale head, a fanned tail, and broad continuous wings ending in fingered primaries
+  // golden eagle: a long body, a pale gold head, a fanned tail, broad cambered wings ending in tapered primaries
   run(() => {
-    ell(0, 0, 0, 0.42, 0.13, 0.14, 38); ell(0.42, 0.04, 0, 0.12, 0.1, 0.09, 39); ell(0.54, 0.02, 0, 0.06, 0.035, 0.03, 35);
+    ell(-0.05, 0, 0, 0.5, 0.12, 0.12, 38, L(0, 0, 0), 12, 7); ell(0.44, 0.04, 0, 0.13, 0.095, 0.085, 42); ell(0.57, 0.02, 0, 0.065, 0.035, 0.03, 35);
     const fan = (x0, x1, w0, w1) => m.quad([x0, 0, -w0], [x0, 0, w0], [x1, -0.02, w1], [x1, -0.02, -w1], 38, 0, 0, 0, 0, 0, 0, 0, 0);
-    fan(-0.3, -0.85, 0.08, 0.26);
+    fan(-0.4, -0.95, 0.08, 0.27);
     for (const sd of [1, -1]) {
       const lb = L(sd > 0 ? 6 : 7, 0.12 * sd, 0.04), q = (a, b, c, d, mat) => m.quad(a, b, c, d, mat, lb[0], lb[1], lb[0], lb[1], lb[0], lb[1], lb[0], lb[1]);
       const P = (x, z, y = 0.04) => [x, y, z * sd];
-      q(P(0.2, 0.1), P(0.16, 0.95, 0.07), P(-0.28, 0.95, 0.05), P(-0.24, 0.1), 38);                   // inner wing
-      q(P(0.16, 0.95, 0.07), P(0.1, 1.55, 0.09), P(-0.22, 1.55, 0.07), P(-0.28, 0.95, 0.05), 38);       // outer wing
-      for (let f = 0; f < 5; f++) { const x0 = 0.08 - f * 0.07, z0 = 1.55; q(P(x0, z0, 0.09), P(x0 + 0.02, z0 + 0.42 - f * 0.05, 0.12 - f * 0.01), P(x0 - 0.035, z0 + 0.4 - f * 0.05, 0.11 - f * 0.01), P(x0 - 0.06, z0, 0.08), 38); }
-      q(P(0.18, 0.12, 0.05), P(0.14, 0.9, 0.08), P(0.02, 0.9, 0.075), P(0.04, 0.12, 0.05), 39);        // pale coverts along the leading edge
+      // two chordwise strips, the middle raised: the wing has a curve to catch the light
+      for (const [z0, z1, le0, le1, te0, te1, y0, y1] of [[0.1, 0.95, 0.2, 0.16, -0.26, -0.28, 0.04, 0.07], [0.95, 1.55, 0.16, 0.1, -0.28, -0.22, 0.07, 0.09]]) {
+        const mc0 = (le0 + te0) / 2 + 0.05, mc1 = (le1 + te1) / 2 + 0.05;
+        q(P(le0, z0, y0), P(le1, z1, y1), P(mc1, z1, y1 + 0.035), P(mc0, z0, y0 + 0.035), z0 < 0.5 ? 39 : 38);
+        q(P(mc0, z0, y0 + 0.035), P(mc1, z1, y1 + 0.035), P(te1, z1, y1), P(te0, z0, y0), 38);
+      }
+      // primaries: tapered to points, spread like fingers
+      for (let f = 0; f < 6; f++) {
+        // each a narrow feather with a gap to the next, fanned out: the eagle's 'fingers'
+        const x0 = 0.08 - f * 0.06, z0 = 1.5, ang = (f - 2.5) * 0.16, len = 0.5 - abs(f - 2) * 0.04;
+        const tx = x0 + sin(-ang) * len, tz = z0 + cos(ang) * len;
+        q(P(x0 + 0.018, z0, 0.09), P(tx + 0.01, tz, 0.12), P(tx - 0.01, tz, 0.12), P(x0 - 0.018, z0, 0.088), 38);
+      }
     }
+  });
+  // a clinker rowboat: painted hull, timber inside, two thwarts and a pair of oars shipped along the sides
+  run(() => {
+    const NS = 12, NP = 8, len = 2.1;
+    const st = (i) => -len + (2 * len * i) / NS;
+    const w = (x) => 0.66 * sqrt(max(0, 1 - (x / (len + 0.08)) ** 2)) + 0.02, top = (x) => 0.38 + 0.12 * (x / len) ** 2, bot = (x) => -0.2 + 0.08 * (x / len) ** 4;
+    for (const [inner, mat] of [[0, 40], [1, 41]]) {
+      const b0 = m.nv; m.grow((NS + 1) * (NP + 1), NS * NP * 6);
+      for (let i = 0; i <= NS; i++) for (let j = 0; j <= NP; j++) {
+        const x = st(i), ph = -PI / 2 + PI * j / NP, k = inner ? 0.94 : 1, ww = w(x) * k, dep = (top(x) - bot(x)) * k;
+        const z = ww * sin(ph), y = top(x) - dep * cos(ph) * (inner ? 0.97 : 1) - (inner ? 0.03 : 0);
+        m.vert(x, y, z, 0, -cos(ph), sin(ph) * 1.3, mat, 2, 0);
+      }
+      for (let i = 0; i < NS; i++) for (let j = 0; j < NP; j++) { const a = b0 + i * (NP + 1) + j, b = a + NP + 1; m.tri(a, b, b + 1); m.tri(a, b + 1, a + 1); }
+    }
+    for (const x of [-0.7, 0.45]) { const hw = w(x) * 0.92; m.quad([x - 0.12, 0.2, -hw], [x + 0.12, 0.2, -hw], [x + 0.12, 0.2, hw], [x - 0.12, 0.2, hw], 41, 2, 0, 2, 0, 2, 0, 2, 0); }
+    for (const z of [-1, 1]) { seg([-1.6, 0.36, z * 0.5], [1.2, 0.33, z * 0.55], 0.025, 0.025, 41, L(0, 0, 0), 5); m.quad([1.2, 0.32, z * 0.5], [1.75, 0.3, z * 0.48], [1.75, 0.3, z * 0.62], [1.2, 0.32, z * 0.6], 41, 2, 0, 2, 0, 2, 0, 2, 0); }
   });
   return { m, runs };
 }
@@ -136,10 +165,12 @@ function makeLife() {
   for (const [x, z] of [[-170, 250], [-330, 360], [40, 270], [-470, 440]]) herd(KIND.SWAN, x, z, 2, 12, water);
   for (const [x, z] of [[-120, 300], [-250, 220], [-420, 330]]) herd(KIND.DUCK, x, z, 5, 10, water);
   byKind.push([[0, 0, 0, 0]]);
+  byKind.push([[-126, 172, 0.6, 0], [-139, 166, 2.1, 0], [-318, 306, 4, 0]]);
   LN = 0;
   for (let k = 0; k < byKind.length; k++) {
     LRUN.push([LN, byKind[k].length]);
     for (const [x, z, hx, hz] of byKind[k]) {
+      if (k === KIND.BOAT) { LA[LN * LS] = k; LA[LN * LS + 1] = x; LA[LN * LS + 2] = z; LA[LN * LS + 3] = hx; LA[LN * LS + 14] = 1.25; LN++; continue; }
       if (LN >= LIFEMAX) break;
       const a = LA.subarray(LN * LS, LN * LS + LS);
       a[0] = k; a[1] = x; a[2] = z; a[3] = rnd() * TAU; a[4] = hx; a[5] = hz; a[6] = x; a[7] = z; a[8] = 0; a[9] = rr(1, 8);
@@ -159,6 +190,7 @@ function eagleAt(t) {
 function lifeTick(dt, cx, cy, cz) {
   for (let i = 0; i < LN; i++) {
     const b = i * LS, k = LA[b];
+    if (k === KIND.BOAT) { const o = i * 8, t = F[TIME] + i * 3; LI[o] = LA[b + 1]; LI[o + 1] = sin(t * 1.3) * 0.05 - 0.05; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3] + sin(t * 0.21) * 0.15; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.EAGLE) { eagleAt(F[TIME]); const o = i * 8; LI[o] = EG[0]; LI[o + 1] = EG[1]; LI[o + 2] = EG[2]; LI[o + 3] = atan2(EG[5], EG[3]); LI[o + 4] = LA[b + 14]; LI[o + 5] = F[TIME] * 0.55 % 1; LI[o + 6] = 1; LI[o + 7] = 0.15 + 0.55 * sstep(0.75, 0.95, sin(F[TIME] * 0.23 + 3.3)); continue; }
     const swim = k >= KIND.SWAN, sheep = k === KIND.SHEEP;
     let x = LA[b + 1], z = LA[b + 2];

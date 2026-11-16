@@ -84,11 +84,11 @@ function buildCastle() {
     prism(x, z, rr0 * 1.12, rr0 * 1.04, max(g, -2), y0, n, 13, rot); prism(x, z, rr0 * 1.04, rr0, y0, y0 + 2, n, 0, rot);
     prism(x, z, rr0, rr0, y0 + 2, top, n, 0, rot);
     // string courses
-    for (let y = y0 + 9; y < top - 4; y += 9 + floor(rnd() * 3)) prism(x, z, rr0 + 0.18, rr0 + 0.18, y, y + 0.45, n, 5, rot);
+    for (let y = y0 + 9; y < top - 4; y += 9 + floor(rnd() * 3)) if (!o.clock || y < top - 2 * r * 0.62 - 3) prism(x, z, rr0 + 0.18, rr0 + 0.18, y, y + 0.45, n, 5, rot);
     // windows: one per face per floor on narrow faces, offset floor to floor
     const nw = n === 4 ? 4 : min(n, r > 6 ? 10 : r > 4 ? 6 : 4), ww = min(1.5, r * 0.36);
     for (let y = y0 + 4, f = 0; y < top - 4; y += 6.5, f++) for (let i = 0; i < nw; i++) {
-      if (rnd() < 0.18) continue;
+      if (rnd() < 0.18 || (o.clock && y > top - 2 * r * 0.62 - 5)) continue;
       const a = n === 4 ? rot + PI / 4 + i * PI / 2 : rot + (i + (f & 1) * 0.5) * TAU / nw + PI / n, rw = n === 4 ? r : rr0 * cos(PI / n);
       if (n === 4) for (const s of [-0.45, 0.45]) win(x + cos(a) * rw - sin(a) * s * r, y, z + sin(a) * rw + cos(a) * s * r, cos(a), sin(a), ww * 0.8, 2.6);
       else win(x + cos(a) * rw, y, z + sin(a) * rw, cos(a), sin(a), ww, 2.7);
@@ -99,7 +99,13 @@ function buildCastle() {
     COLC.push([x, z, r + 0.6, top + 1]);
     if (o.clock) {
       // clock faces near the top on all four sides
-      for (let i = 0; i < 4; i++) { const a = rot + PI / 4 + i * PI / 2, rw = r + 0.08, s = r * 0.62; const cx = x + cos(a) * rw, cz = z + sin(a) * rw, tx = -sin(a), tz = cos(a); m.quad([cx - tx * s, top - 2 * s - 2, cz - tz * s], [cx + tx * s, top - 2 * s - 2, cz + tz * s], [cx + tx * s, top - 2, cz + tz * s], [cx - tx * s, top - 2, cz - tz * s], 9, 0, 0, 1, 0, 1, 1, 0, 1); const k = m.nv - 4; if (m.b[k * 24 + 12] * cos(a) + m.b[k * 24 + 14] * sin(a) < 0) for (let j = 0; j < 4; j++) { m.b[(k + j) * 24 + 12] *= -1; m.b[(k + j) * 24 + 14] *= -1; } }
+      // round dials (a disc, so the castle shader needs no cut-out), uv 0-1 across the disc as on a square face
+      for (let i = 0; i < 4; i++) {
+        const a = rot + PI / 4 + i * PI / 2, rw = r + 0.08, s = r * 0.62, cx = x + cos(a) * rw, cz = z + sin(a) * rw, cy = top - 2 - s, tx = -sin(a), tz = cos(a), N = 32;
+        m.grow(N + 1, N * 3); const c0 = m.vert(cx, cy, cz, cos(a), 0, sin(a), 9, 0.5, 0.5);
+        for (let k = 0; k < N; k++) { const f = k / N * TAU; m.vert(cx + tx * s * cos(f), cy + s * sin(f), cz + tz * s * cos(f), cos(a), 0, sin(a), 9, 0.5 + 0.5 * cos(f) * 1.005, 0.5 + 0.5 * sin(f) * 1.005); }
+        for (let k = 0; k < N; k++) m.tri(c0, c0 + 1 + k, c0 + 1 + (k + 1) % N);
+      }
     }
     const roof = o.roof || 'spire';
     if (roof === 'flat') {
@@ -447,16 +453,20 @@ function buildCastle() {
   begin();
   {
     // each its own small object, so its bounds stay tight (trees and animals keep clear of object bounds)
+    let grp = 0;
     const lantern = (x, z, y, post) => {
+      LAMPS.push(x, y + 0.3, z, grp);
       end(); begin();
       if (post) box(x, z, 1, 0, 0.07, 0.07, y - post, y, 6, 6);
       box(x, z, 1, 0, 0.22, 0.22, y, y + 0.55, 16, 6); spire(x, z, 0.32, y + 0.55, 0.3, 4, 6, PI / 4);
     };
     const P = (t) => [mix(170, 330, t) + 25 * sin(t * 7), mix(-380, -500, t) + 30 * cos(t * 5)];
     for (let i = 1; i < 16; i++) { const [ax, az] = P(i / 16), [bx, bz] = P(i / 16 + 0.01), L = hypot(bx - ax, bz - az), s = i & 1 ? 1 : -1, x = ax - (bz - az) / L * 3.2 * s, z = az + (bx - ax) / L * 3.2 * s; lantern(x, z, H(x, z) + 2.4, 2.4); }
-    for (let z = -110; z > -320; z -= 30) for (const s of [-1, 1]) lantern(-30 + s * 3.4, z, T + 1.1, 0);
-    for (const x of [161, 243]) for (const s of [-1, 1]) lantern(x, -86 + s * 3.4, C + 2.2, 2.2);
+    grp = 1; for (let z = -110; z > -320; z -= 30) for (const s of [-1, 1]) lantern(-30 + s * 3.4, z, T + 1.1, 0);
     for (const s of [-1, 1]) lantern(-30 + s * 4.5, -86, T + 3.2, 0);
+    grp = 2; for (const x of [161, 243]) for (const s of [-1, 1]) lantern(x, -86 + s * 3.4, C + 2.2, 2.2);
+    for (const x of [189, 215]) lantern(x, -86, C + 2.6, 0); // hung inside the covered bridge
+    grp = 3; // the jetty lantern glows but casts no pool (it would put the whole castle inside a group's box)
     lantern(-110 - 14 - 0.7 * 11, 156 + 14 - 0.71 * 11, 2.3, 1.5);
   }
   end();
@@ -466,5 +476,6 @@ function buildCastle() {
   return m;
 }
 const VSMOKE = []; // chimney tops in the village
+const LAMPS = []; // lanterns: x, y, z, group (0 lane, 1 viaduct, 2 the rest)
 const BANS = []; // banner poles: x, top y, z, seed
 const FALLS = [-171, 43, 86, -177, 0, 93]; // waterfall lip and foot

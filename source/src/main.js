@@ -57,8 +57,8 @@ const tShadow = tex(SHADOW, SHADOW, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BIN
 const tDummy = tex(1, 1, DEPTH, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tDummyC = tex(1, 1, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
 const tSky = tex(512, 256, HDR, TU.RENDER_ATTACHMENT | TU.TEXTURE_BINDING);
-const UB = new Float32Array(76), UBR = new Float32Array(76), UBS = new Float32Array(76);
-const ubo = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 304, usage: BU.UNIFORM | BU.COPY_DST });
+const UB = new Float32Array(292), UBR = new Float32Array(292), UBS = new Float32Array(292);
+const ubo = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST }), uboR = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST }), uboS = device.createBuffer({ size: 1168, usage: BU.UNIFORM | BU.COPY_DST });
 const bHC = device.createBuffer({ size: CN * CN * 4, usage: BU.STORAGE | BU.COPY_SRC }), bHF = device.createBuffer({ size: FN * FN * 4, usage: BU.STORAGE | BU.COPY_SRC });
 
 const VF = SS.VERTEX | SS.FRAGMENT;
@@ -107,7 +107,7 @@ P.water = scenePipe(mWater, [], { strip: 1 });
 P.bird = scenePipe(mBird, [ibBirdL], {});
 P.precip = scenePipe(mod(W_PRECIP), [], { strip: 1, blend: PREM });
 { const ml = mod(W_LIFE); P.life = scenePipe(ml, [vbMeshL, ibTreeL]); R.life = scenePipe(ml, [vbMeshL, ibTreeL], {}, 1); }
-const NPREC = 14000 >> LV;
+const NPREC = 11000 >> LV;
 const S = { terr: shadowPipe(mTerr, []), solid: shadowPipe(mSolid, [vbMeshL]), tree: shadowPipe(mTree, [vbMeshL, ibTreeL]) };
 
 const bglBlit = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.FRAGMENT, texture: {} }, { binding: 1, visibility: SS.FRAGMENT, sampler: {} }] });
@@ -242,7 +242,17 @@ function lightUB() {
     const se = SEASON[season], w = WEATHER[weather];
     u[64] = t.night; u[65] = t.glow * (1 + 0.6 * w.cover * (1 - t.night)); u[66] = w.cover; u[67] = t.grade * (1 - 0.6 * w.cover);
     u[68] = se.snow; u[69] = se.phase; u[70] = w.wet * (1 - se.snow * 0.5); u[71] = w.fog;
-    u[72] = w.precip; u[73] = w.wind; u[74] = se.snow > 0.5 ? 1 : 0; u[75] = 0;
+    u[72] = w.precip; u[73] = w.wind; u[74] = se.snow > 0.5 ? 1 : 0; u[75] = t.clock;
+    // lanterns: a box around each group (so most pixels skip them), then up to 16 lights per group
+    for (let g = 0; g < 3; g++) {
+      let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9, y0 = 1e9, y1 = -1e9, k = 0;
+      for (let i = 0; i < LAMPS.length; i += 4) if (LAMPS[i + 3] === g && k < 16) {
+        const o = 100 + (g * 16 + k++) * 4; u[o] = LAMPS[i]; u[o + 1] = LAMPS[i + 1]; u[o + 2] = LAMPS[i + 2]; u[o + 3] = 1;
+        x0 = min(x0, LAMPS[i] - 10); z0 = min(z0, LAMPS[i + 2] - 10); x1 = max(x1, LAMPS[i] + 10); z1 = max(z1, LAMPS[i + 2] + 10);
+        y0 = min(y0, LAMPS[i + 1] - 10); y1 = max(y1, LAMPS[i + 1] + 10);
+      }
+      u[76 + g * 4] = x0; u[77 + g * 4] = z0; u[78 + g * 4] = x1; u[79 + g * 4] = z1; u[88 + g * 4] = y0; u[89 + g * 4] = y1;
+    }
   }
 }
 bakeShadow();
@@ -497,7 +507,6 @@ function render() {
   if (!(DBG & 16)) drawTrees(r, P.tree, false);
   drawLife(r, P.life);
   r.setPipeline(P.banner); r.draw(6 * 24, NBAN);
-  r.setPipeline(P.boat); r.draw(30, 3);
   // rooks by day, the eagle on dry days, the owl at night, bats from dusk (not in rain or winter)
   { const nt = TOD[tod].night, wet = WEATHER[weather].precip > 0.5, cold = SEASON[season].snow > 0.5;
     r.setPipeline(P.bird); r.setVertexBuffer(0, ibBirds);
