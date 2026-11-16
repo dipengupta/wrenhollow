@@ -1,4 +1,4 @@
-// Drives the installed Chrome (headful, so WebGPU runs on the real GPU) against ../dev.html.
+// Drives the installed Chrome (headless by default; WebGPU still runs on the real GPU) against ../dev.html.
 //   node shots.mjs poses [dir] [scale]      the six viewpoints as PNGs (scale 1 = 3456x2234, 0.5 = 1728x1117)
 //   node shots.mjs look x y z tx ty tz name [dir]   one custom view
 //   node shots.mjs fly [dir] [n]             n frames spread over the 60 s flight, plus bursts of consecutive frames
@@ -12,11 +12,26 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const [mode = 'poses', ...args] = process.argv.slice(2);
 const outDir = (i) => { const d = path.resolve(args[i] || path.join(here, '..', 'shots')); mkdirSync(d, { recursive: true }); return d; };
-const browser = await puppeteer.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: false,
-  args: ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--window-size=1760,1200', '--allow-file-access-from-files'],
-  defaultViewport: { width: 1728, height: 1117, deviceScaleFactor: 2 },
-});
+// The tests never take over the screen. Screenshots run headless (the GPU still renders). The benchmark needs a real
+// window for true frame pacing, so it starts a separate Chrome (its own temporary profile) in the background with
+// `open -g`, which does not take focus, with its window parked off-screen. SHOW=1 runs everything in a visible window.
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+const show = process.env.SHOW === '1';
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const flags = ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures', '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--allow-file-access-from-files'];
+const viewport = { width: 1728, height: 1117, deviceScaleFactor: 2 };
+let browser;
+if (mode === 'bench' && !show) {
+  const port = 9300 + (process.pid % 500), dir = mkdtempSync(path.join(os.tmpdir(), 'wrenhollow-bench-'));
+  execFileSync('open', ['-g', '-n', '-a', 'Google Chrome', '--args', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--window-position=-4000,0', '--window-size=1760,1200', ...flags]);
+  for (let i = 0; i < 100 && !browser; i++) { try { browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: viewport }); } catch { await new Promise((r) => setTimeout(r, 200)); } }
+  // when this script ends, that Chrome and its temporary profile go too
+  process.on('exit', () => { try { execFileSync('pkill', ['-f', dir]); } catch {} try { rmSync(dir, { recursive: true, force: true }); } catch {} });
+} else {
+  browser = await puppeteer.launch({ executablePath: CHROME, headless: !show, args: [...flags, '--window-size=1760,1200'], defaultViewport: viewport });
+}
 const page = await browser.newPage();
 const errs = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errs.push(m.text()); });
