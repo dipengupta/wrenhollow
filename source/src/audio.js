@@ -29,6 +29,12 @@ function mkSound(ac) {
   const rumble = G(0, out, G(0.8, wet)), crack = G(0, out); src(0.22, BQ('lowpass', 140, 0.8, rumble)); src(0.6, BQ('bandpass', 400, 0.7, crack));
   // running water: the mill race and Wren Falls, louder as you come close
   const water = G(0, out); src(1.6, BQ('bandpass', 900, 0.4, water)); src(0.9, BQ('lowpass', 500, 0.7, G(0.6, water)));
+  // starlings: the murmuration's chatter, a high flickering hiss that swells as you near the flock
+  const chat = G(0, out), chatT = G(0.5, chat); src(2.9, BQ('bandpass', 4200, 1.4, chatT)); lfo(13, 0.45, chatT.gain); lfo(5.3, 0.2, chatT.gain);
+  // the beacon's fire: a low roar of flame, and crackles scheduled at random
+  const fire = G(0, out); src(0.5, BQ('lowpass', 260, 0.6, fire)); const crk = G(0, out); src(2.2, BQ('highpass', 2500, 0.8, crk));
+  // bees about the garden on summer days: a soft drone, wavering
+  const bees = G(0, out); const bo = N(OscillatorNode, { type: 'sawtooth', frequency: 228 }, BQ('lowpass', 700, 1, bees)); lfo(0.7, 9, bo.frequency); lfo(4.1, 0.004, bees.gain);
   // pooled voices
   const pool = (n, send, type) => Array.from({ length: n }, () => { const p = N(StereoPannerNode, {}, out, G(send, wet)), g = G(0, p); return { p, g, o: N(OscillatorNode, { type }, g) }; });
   const bell = pool(6, 2.2), rook = pool(3, 0.6, 'sawtooth'), owl = pool(2, 1.2, 'sine'), honk = pool(4, 0.8, 'square'), moo = pool(2, 1, 'sawtooth');
@@ -38,7 +44,7 @@ function mkSound(ac) {
     f.setValueAtTime(f0, t); f.exponentialRampToValueAtTime(f1, t + dur);
     g.setValueAtTime(0, t); g.linearRampToValueAtTime(vol, t + att); g.setTargetAtTime(0, t + att, (dur - att) / 5);
   };
-  let lt = ac.currentTime, tR = lt + 3, lx = F[CX], ly = F[CY], lz = F[CZ], lastHour = -1, lastTod = tod, strikeAt = lt + 4, seen = STRIKES, tG = lt + 2, tC = lt + 20;
+  let lt = ac.currentTime, tR = lt + 3, lx = F[CX], ly = F[CY], lz = F[CZ], lastHour = -1, lastTod = tod, strikeAt = lt + 4, seen = STRIKES, tG = lt + 2, tC = lt + 20, gSeen = GFLUSH, tK = lt + 8, tS = lt + 15;
   out.gain.setTargetAtTime(VOL, lt, 1.5);
   return () => {
     const now = ac.currentTime, t = now + 0.05, dt = now - lt;
@@ -64,6 +70,25 @@ function mkSound(ac) {
       if (d < 700) { const v = 0.02 * (1 - d / 700); for (let k = 0; k < 3; k++) { const f = rr(300, 380); play(honk, t + k * rr(0.25, 0.5), f, f * 0.85, 0.2, v * rr(0.5, 1), 0.02); } }
       tG = t + rr(1, 3);
     }
+    // the murmuration (the same path as the shader's), at the ends of the day
+    { const T = F[TIME] * 0.045, sx = -230 + 110 * sin(T * 1.3), sy = 78 + 12 * sin(T * 2.1), sz = 380 + 90 * cos(T * 0.9), d = hypot(lx - sx, ly - sy, lz - sz);
+      const on = CUR.grade > 0.55 && night < 0.45 && w.precip < 0.5 && !snowy && w.fog < 0.5;
+      chat.gain.setTargetAtTime(on ? 0.12 * clamp(1 - d / 450, 0, 1) ** 2 : 0, t, 0.6); }
+    // grouse: up they go, calling go-back go-back
+    if (GFLUSH !== gSeen) { gSeen = GFLUSH; for (let k = 0; k < 6; k++) { const tt = t + 0.15 + k * (0.16 - k * 0.012), f = k < 2 ? 820 : 620; play(honk, tt, f, f * 0.8, 0.09, 0.014, 0.008); } }
+    // a kite's thin whistle over the western hills, by day
+    if (t > tK) { if (night < 0.3 && w.precip < 0.5 && hypot(lx + 620, lz + 60) < 500) { play(owl, t, 1900, 1500, 0.45, 0.006, 0.05); play(owl, t + 0.55, 1650, 1150, 0.7, 0.005, 0.05); } tK = t + rr(18, 35); }
+    // in autumn the stag roars: deep, rough grunts carrying across the meadow
+    if (t > tS) {
+      const so = LRUN[KIND.STAG][0] * 8, d = hypot(lx - LI[so], lz - LI[so + 2]);
+      if (SEASON[season].phase === 2 && night < 0.7 && d < 320) { const v = 0.045 * (1 - d / 320); for (let k = 0; k < 3; k++) { play(moo, t + k * 1.1, 92, 64, 0.9, v, 0.12); play(moo, t + k * 1.1, 184, 120, 0.9, v * 0.5, 0.12); } }
+      tS = t + rr(20, 40);
+    }
+    // the beacon burning after dark, and bees in the Walled Garden on summer days
+    { const d = hypot(lx - BEACON[0], ly - BEACON[1], lz - BEACON[2]), on = night > 0.3 && d < 80, v = on ? clamp(1 - d / 80, 0, 1) ** 2 : 0;
+      fire.gain.setTargetAtTime(0.25 * v, t, 0.4);
+      if (v > 0) for (let k = 0; k < 3; k++) if (rnd() < 0.5) { const tt = t + rnd() * 0.1; crk.gain.setValueAtTime(0.25 * v * rr(0.3, 1), tt); crk.gain.setTargetAtTime(0, tt + 0.005, 0.012); }
+      const db = hypot(lx - 166, ly - 16, lz - 126); bees.gain.setTargetAtTime(SEASON[season].phase === 1 && night < 0.3 && w.precip < 0.5 ? 0.05 * clamp(1 - db / 45, 0, 1) ** 2 : 0, t, 0.5); }
     // highland cattle lowing now and then, when you are near one of their herds
     if (t > tC) {
       if (night < 0.5 && (hypot(lx + 265, lz + 505) < 160 || hypot(lx - 245, lz + 235) < 120)) { const f = rr(105, 130); play(moo, t, f, f * 0.75, 1.6, 0.03, 0.25); play(moo, t, f * 2, f * 1.5, 1.6, 0.012, 0.25); }

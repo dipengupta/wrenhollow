@@ -194,10 +194,11 @@ const vbCastle = buf(new Uint8Array(CM.v, 0, CM.nv * 24), BU.VERTEX), ibCastle =
 const mFx = mod(W_FX());
 P.smoke = scenePipe(mFx, [], { vs: 'vsSmoke', fs: 'fsSmoke', blend: PREM, strip: 1 });
 P.fly = scenePipe(mFx, [], { vs: 'vsFly', fs: 'fsFly', blend: ADD, strip: 1 });
+P.bfly = scenePipe(mFx, [], { vs: 'vsBfly', fs: 'fsBfly', blend: PREM });
 P.fall = scenePipe(mFx, [], { vs: 'vsFall', fs: 'fsFall', blend: PREM, strip: 1 });
 P.banner = scenePipe(mFx, [], { vs: 'vsBan', fs: 'fsBan' });
 P.boat = scenePipe(mFx, [], { vs: 'vsBoat', fs: 'fsBoat' });
-const NBAN = BANS.length / 4, NSMOKE = VSMOKE.length / 3 * 14, NFLY = 420 >> LV, NFALL = 5;
+const NBAN = BANS.length / 4, NSMOKE = VSMOKE.length / 3 * 14, NFLY = 420 >> LV, NFALL = 5, NBFLY = 150;
 const NOBJ = OBJS.length, OB = new Float32Array(NOBJ * 8); OBJS.forEach((o, i) => OB.set(o, i * 8));
 
 await say('Planting the forest…', 0.7, 1200);
@@ -217,7 +218,8 @@ function drawLife(r, pl) {
   const nt = CUR.night, eagle = nt < 0.3 && WEATHER[weather].precip < 0.5;
   for (let k = 0; k < LRUN.length; k++) {
     const [s0, n] = LRUN[k];
-    if (!n || (k === KIND.EAGLE && !eagle) || (k === KIND.VILLAGER && nt > 0.5) || (k === KIND.BEARER && nt < 0.25)) continue;
+    const ph = SEASON[season].phase;
+    if (!n || (k === KIND.EAGLE && !eagle) || (k === KIND.VILLAGER && nt > 0.5) || (k === KIND.BEARER && nt < 0.25) || (k === KIND.LAMB && ph !== 0) || (k === KIND.STOOK && ph !== 1 && ph !== 2)) continue;
     r.drawIndexed(LM.runs[k][1], n, LM.runs[k][0], 0, s0);
   }
 }
@@ -616,11 +618,15 @@ function render() {
     if (nt < 0.5 && !wet) r.draw(18, NROOK);
     if (nt > 0.5) r.draw(18, 1, 0, NROOK + 1);   // the owl (slot NROOK is unused: the eagle is drawn with the animals)
     if (nt > 0.2 && !wet && !cold) r.draw(18, NGOOSE0 - NROOK - 2, 0, NROOK + 2);
-    if (SEASON[season].phase === 2 && nt < 0.6 && !wet) r.draw(18, 15, 0, NGOOSE0); }
+    if (SEASON[season].phase === 2 && nt < 0.6 && !wet) r.draw(18, 15, 0, NGOOSE0);
+    // starlings gather over the loch in the low light at the ends of the day; kites by day over the western hills
+    if (CUR.grade > 0.55 && nt < 0.45 && !wet && !cold && WEATHER[weather].fog < 0.5) r.draw(18, NSTAR, 0, NSTAR0);
+    if (nt < 0.3 && !wet) r.draw(18, 3, 0, NKITE0); }
   if (!(DBG & 32)) { r.setPipeline(P.sky); r.draw(3); }
   r.setPipeline(P.fall); r.draw(32, NFALL + 1);   // the ribbons, then the mist veil at the foot
   r.setPipeline(P.smoke); r.draw(4, NSMOKE);
   r.setPipeline(P.fly); r.draw(4, NFLY);
+  if (SEASON[season].phase === 1 && CUR.night < 0.3 && !WEATHER[weather].precip) { r.setPipeline(P.bfly); r.draw(6, NBFLY); }
   if (!(DBG & 64)) {
     if (WEATHER[weather].precip > 0) { r.setPipeline(P.precip); r.draw(4, SEASON[season].snow > 0.5 ? NPREC * 0.7 | 0 : NPREC); } // flakes are bigger than drops: fewer
     else if (SEASON[season].phase === 2) { r.setPipeline(P.precip); r.draw(4, NPREC >> 2); } // autumn: leaves falling
@@ -847,7 +853,7 @@ document.addEventListener('pointerlockchange', () => { if (!mapOpen) ui(!documen
 
 // draw from every viewpoint once while loading, so the first sight of anything does not cost a frame later
 await say('Lighting the windows…', 1, 400);
-for (let t = 0; t < FLYT; t += 5) { F[FLT] = t; flyAt(); render(); }
+for (let t = 0; t < FLYT; t += 1.5) { F[FLT] = t; flyAt(); render(); }
 F[FLT] = 0;
 for (let i = POSES.length - 1; i >= 0; i--) { lookAt(...POSES[i]); render(); }
 // ?place=starwatch (any place's name, letters only) starts the flight there

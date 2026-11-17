@@ -91,12 +91,15 @@ the arches of the Long Viaduct.
   found. The map names thirty of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
   Kilwren, the island of Inchkeld, Dun Corran and the Grey Stones. `?place=starwatch` in the address starts the flight there.
 - **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, herds of red deer that bolt
-  when you fly too close, highland cattle, sheep on the village pastures, rabbits and red squirrels, swans and ducks on
-  the loch, geese flying over in autumn, a golden eagle circling the crag, rooks by day, an owl and bats at night,
+  when you fly too close, highland cattle, sheep on the village pastures (with lambs in spring), rabbits and red squirrels, red grouse that
+  burst up from the heather as you fly low, swans and ducks on the loch, a murmuration of starlings over the loch at
+  the ends of the day, red kites over the western hills, geese flying over in autumn, butterflies on summer days, stooks
+  of corn in the fields in late summer and autumn, ice along the burn in winter, a golden eagle circling the crag, rooks by day, an owl and bats at night,
   fireflies on summer evenings, villagers walking the lane by day, lantern-bearers crossing the viaduct and the bridge
   after dark, lanterns along the viaduct, the bridge and the village lane, chimney smoke
 - **Sound**: wind that rises with height, speed and the weather, rain and thunder, lapping water, the waterfall and
-  the mill race, the Bell Tower striking the hours, rooks by day and an owl at night, geese and cattle
+  the mill race, the Bell Tower striking the hours, rooks by day and an owl at night, geese, cattle, grouse, the starlings' chatter, a kite's whistle, the stag's roar in autumn, the
+  beacon's fire and bees in the Walled Garden
 
 ## How it works
 

@@ -96,7 +96,8 @@ function makeTrees() {
 }
 
 // rooks: flocks circling the towers; each instance is a bird with its own orbit
-let NGOOSE0 = 0;
+let NGOOSE0 = 0, NSTAR0 = 0, NKITE0 = 0;
+const NSTAR = 1400;
 function makeBirds() {
   rseed(9);
   const a = [];
@@ -112,5 +113,12 @@ function makeBirds() {
   // geese in autumn: a V of 15 (back, side, height offsets from the leader; radius -1 marks them)
   NGOOSE0 = a.length / 8;
   for (let i = 0; i < 15; i++) { const row = (i + 1) >> 1, s = i & 1 ? 1 : -1; a.push(row * 3.4 + rr(-0.4, 0.4), s * row * 2.6 * (i ? 1 : 0), rr(-0.4, 0.4), -1, 0, 0, rnd(), 1.6); }
+  // the starling murmuration: each bird a point inside a unit ball (denser toward the cores); the shader stretches,
+  // folds and swirls the ball
+  NSTAR0 = a.length / 8;
+  for (let i = 0; i < NSTAR; i++) { const u = rnd() * 2 - 1, th = rnd() * TAU, s = Math.sqrt(1 - u * u), r = (rnd() ** 0.7) * (i % 3 ? 1 : 0.55); a.push(s * Math.cos(th) * r, u * r, s * Math.sin(th) * r, -2, 0, 0, rnd(), 0.45); }
+  // red kites: wide circles over the western hills (size 2: they glide, rufous)
+  NKITE0 = a.length / 8;
+  for (const [x, y, z, r, sp] of [[-620, 165, -60, 110, 0.06], [-720, 150, 150, 90, -0.07], [-470, 175, -330, 120, 0.05]]) a.push(x, y, z, r, rnd() * TAU, sp, rnd(), 2.05);
   return new Float32Array(a);
 }

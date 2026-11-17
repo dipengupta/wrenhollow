@@ -8,7 +8,7 @@
 // 43 duck grey flank, 44 rower's coat, 45 skin, 46 heron grey, 47 heron legs. Limbs 8 and 9 are oars (they sweep about
 // the vertical at the rowlock: pivot x, pivot z), limb 10 the rower leaning through the stroke. Limbs 6 and 7 are the wings (they roll about
 // the body's axis, pivot z in place of pivot x). A small simulation moves them (lifeTick); its output is one preallocated instance array.
-const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5, BOAT: 6, FERRY: 7, HERON: 8, CATTLE: 9, RABBIT: 10, SQUIRREL: 11, WHEEL: 12, VILLAGER: 13, BEARER: 14 };
+const KIND = { HIND: 0, STAG: 1, SHEEP: 2, SWAN: 3, DUCK: 4, EAGLE: 5, BOAT: 6, FERRY: 7, HERON: 8, CATTLE: 9, RABBIT: 10, SQUIRREL: 11, WHEEL: 12, VILLAGER: 13, BEARER: 14, GROUSE: 15, LAMB: 16, STOOK: 17 };
 function lifeMeshes() {
   const m = new Mesh(), runs = [];
   const L = (limb, px, py) => [limb * 10 + px + 2, py];
@@ -66,8 +66,8 @@ function lifeMeshes() {
     }
   };
   run(() => deer(false)); run(() => deer(true));
-  // sheep: a round fleece, a dark face, thin dark legs
-  run(() => {
+  // sheep: a round fleece, a dark face, thin dark legs (the lambs use the same mesh, smaller)
+  const sheepMesh = () => {
     const fn = [-0.05, 0.75, 0, 0.55, 0.36, 0.34];
     ell(0, 0.72, 0, 0.5, 0.32, 0.32, 32, L(0, 0, 0), 12, 7, fn); ell(-0.1, 0.8, 0, 0.42, 0.28, 0.3, 32, L(0, 0, 0), 10, 6, fn);
     const hd = L(5, 0.38, 0.75);
@@ -75,7 +75,8 @@ function lifeMeshes() {
     for (const z of [-1, 1]) ell(0.5, 0.86, z * 0.12, 0.08, 0.025, 0.04, 33, hd);
     let k = 1;
     for (const x of [0.3, -0.3]) for (const z of [0.15, -0.15]) { const lb = L(k++, x, 0.5), kx = x + (x > 0 ? 0.03 : -0.05); seg([x, 0.52, z], [kx, 0.26, z], 0.07, 0.045, 33, lb); seg([kx, 0.26, z], [x, 0, z], 0.04, 0.035, 33, lb); }
-  });
+  };
+  run(sheepMesh);
   // mute swan: a long body sitting low in the water, an S-shaped neck, an orange bill
   run(() => {
     ell(0, 0.12, 0, 0.55, 0.2, 0.28, 34, L(0, 0, 0), 12, 7); ell(-0.38, 0.22, 0, 0.22, 0.15, 0.2, 34);
@@ -201,12 +202,29 @@ function lifeMeshes() {
     for (const [k, z] of [[1, 0.1], [3, -0.1]]) { const lb = L(k, 0, 0.9); seg([0, 0.92, z], [0, 0.08, z], 0.075, 0.055, 33, lb); seg([0, 0.08, z], [0.1, 0.02, z], 0.05, 0.05, 33, lb); }
   };
   run(() => person(false)); run(() => person(true));
+  // red grouse: a plump dark red-brown body, a short fanned tail, a red comb over the eye; wings that fold when it sits
+  run(() => {
+    const b = L(0, 0, 0);
+    ell(0, 0.2, 0, 0.2, 0.13, 0.12, 54, b, 10, 6); ell(0.17, 0.29, 0, 0.08, 0.075, 0.07, 54, b, 8, 5); ell(0.24, 0.28, 0, 0.03, 0.02, 0.02, 35, b, 4, 3);
+    for (const z of [-1, 1]) ell(0.19, 0.335, z * 0.035, 0.03, 0.012, 0.02, 55, b, 5, 3);
+    m.quad([-0.14, 0.24, -0.06], [-0.14, 0.24, 0.06], [-0.3, 0.2, 0.09], [-0.3, 0.2, -0.09], 54, b[0], b[1], b[0], b[1], b[0], b[1], b[0], b[1]);
+    for (const sd of [1, -1]) {
+      const lb = L(sd > 0 ? 6 : 7, 0.07 * sd, 0.26), P = (x, z, y = 0.26) => [x, y, z * sd];
+      m.quad(P(0.12, 0.07), P(0.07, 0.36, 0.27), P(-0.1, 0.34, 0.26), P(-0.14, 0.07), 54, lb[0], lb[1], lb[0], lb[1], lb[0], lb[1], lb[0], lb[1]);
+    }
+  });
+  run(sheepMesh);   // lambs
+  // a stook: sheaves of corn stood up leaning together to dry, a capping sheaf on top
+  run(() => {
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; seg([cos(a) * 0.34, -0.05, sin(a) * 0.34], [cos(a) * 0.05, 1.15, sin(a) * 0.05], 0.15, 0.07, 53, L(0, 0, 0), 5); }
+    seg([0, 0.95, 0], [0, 1.4, 0], 0.16, 0.03, 53, L(0, 0, 0), 6);
+  });
   return { m, runs };
 }
 
 // ---- the population and its behaviour
 // per animal: kind, x, z, yaw, home x, home z, target x, target z, state, timer, speed, phase, walk, graze, scale, y
-const LS = 16, LIFEMAX = 160;
+const LS = 16, LIFEMAX = 256;
 const LA = new Float32Array(LIFEMAX * LS);  // state
 const LI = new Float32Array(LIFEMAX * 8);   // instance data for the GPU: x, y, z, yaw, scale, phase, walk, graze
 const LRUN = [];                             // per kind: first animal, count
@@ -250,12 +268,25 @@ function makeLife() {
   byKind.push([[MILLW[0], MILLW[2], 0, 0]]);
   byKind.push([0, 0, 0, 1, 1, 1, 2, 2, 3, 3].map((r) => [0, 0, r, 0]));        // villagers: the route each walks
   byKind.push([4, 4, 5, 5, 6, 7].map((r) => [0, 0, r, 0]));        // lantern-bearers
+  // red grouse in coveys on the heather of the higher slopes
+  byKind.push([]);
+  const moor = (x, z) => land(x, z) && H(x, z) > 30;
+  for (const [x, z] of [[-380, -430], [480, -260], [-640, 40], [540, 120], [-120, -640]]) herd(KIND.GROUSE, x, z, 4, 16, moor);
+  // lambs at foot with every other ewe (they follow her, and now and then race about)
+  byKind.push(byKind[KIND.SHEEP].flatMap(([x, z], j) => j % 2 ? [] : [[x + 1.2, z + 0.8, j, 0]]));
+  // stooks of cut corn in rows in the fields by the farms and above the village
+  byKind.push([]);
+  for (const [cx, cz, a] of [[-548, -248, 0.35], [-780, 112, -0.6], [262, -556, 0.1], [228, -570, 0.1]]) {
+    const ex = cos(a), ez = sin(a);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) { const u = (c - 2.5) * 4.2 + rr(-0.4, 0.4), v = (r - 1) * 5 + rr(-0.4, 0.4), x = cx + ex * u - ez * v, z = cz + ez * u + ex * v; if (land(x, z) && slope(x, z) < 0.25) byKind[KIND.STOOK].push([x, z, rnd() * TAU, 0]); }
+  }
   LN = 0;
   for (let k = 0; k < byKind.length; k++) {
     LRUN.push([LN, byKind[k].length]);
     for (const [x, z, hx, hz] of byKind[k]) {
       if (k === KIND.FERRY) { LA[LN * LS] = k; LA[LN * LS + 14] = 1.25; LN++; continue; }
       if (k === KIND.WHEEL) { LA[LN * LS] = k; LA[LN * LS + 14] = 1; LN++; continue; }
+      if (k === KIND.STOOK) { const o = LN * LS; LA[o] = k; LA[o + 1] = x; LA[o + 2] = z; LA[o + 3] = hx; LA[o + 14] = rr(0.9, 1.1); LN++; continue; }
       if (k === KIND.VILLAGER || k === KIND.BEARER) {
         // route, distance along it, direction, pause; the scale's last digits pick a coat colour
         const o = LN * LS; LA[o] = k; LA[o + 4] = hx; LA[o + 5] = rr(0, ROUTEL[hx]); LA[o + 8] = rnd() < 0.5 ? 1 : -1; LA[o + 9] = 0; LA[o + 14] = 1 + 0.0025 * (LN % 4); LN++; continue;
@@ -264,7 +295,8 @@ function makeLife() {
       if (LN >= LIFEMAX) break;
       const a = LA.subarray(LN * LS, LN * LS + LS);
       a[0] = k; a[1] = x; a[2] = z; a[3] = rnd() * TAU; a[4] = hx; a[5] = hz; a[6] = x; a[7] = z; a[8] = 0; a[9] = rr(1, 8);
-      a[10] = 0; a[11] = rnd(); a[12] = 0; a[13] = 1; a[14] = k === KIND.STAG ? 1 : k === KIND.HIND ? rr(0.85, 1) : k === KIND.EAGLE ? 1.1 : rr(0.85, 1.1); a[15] = 0;
+      a[10] = 0; a[11] = rnd(); a[12] = 0; a[13] = 1; a[14] = k === KIND.STAG ? 1 : k === KIND.HIND ? rr(0.85, 1) : k === KIND.EAGLE ? 1.1 : k === KIND.LAMB ? rr(0.5, 0.6) : rr(0.85, 1.1); a[15] = k === KIND.LAMB ? hx : 0;
+      if (k === KIND.GROUSE) { a[13] = 0; a[12] = 0; }
       LN++;
     }
   }
@@ -282,6 +314,7 @@ function makeRoutes() {
     ROUTES.push(new Float32Array(r)); ROUTEL.push(l);
   }
 }
+let GFLUSH = 0;   // counts grouse flushes, for the sound
 const DL = new Float32Array(24); // the lantern-bearers' lanterns this frame: x, y, z, on
 // the ferry's course across Loch Wren, from the boathouse jetty to Inchkeld
 const FERRY = [-135, 186, -210, 262, -300, 360, -390, 455, -440, 520];
@@ -295,12 +328,12 @@ function eagleAt(t) {
 }
 // per kind (by KIND number): how close you may come, how far and fast it runs, walking pace, stride, how far it roams
 //            hind stag sheep swan duck  -  -  -  heron cattle rabbit squirrel
-const SCARE = [45, 45, 22, 18, 18, 0, 0, 0, 22, 18, 15, 10];
-const RUND = [110, 110, 40, 30, 30, 0, 0, 0, 40, 30, 40, 20];
-const FLEE = [9, 9, 3, 2.2, 2.2, 0, 0, 0, 3, 2.5, 6, 4];
-const WALK = [1.1, 1.1, 0.5, 0.6, 0.6, 0, 0, 0, 0.5, 0.5, 1.2, 2.2];
-const STRIDE = [1.6, 1.6, 0.9, 1, 1, 0, 0, 0, 0.9, 1.3, 0.55, 0.35];
-const ROAM = [40, 40, 30, 35, 35, 0, 0, 0, 30, 25, 12, 8];
+const SCARE = [45, 45, 22, 18, 18, 0, 0, 0, 22, 18, 15, 10, 0, 0, 0, 0, 14];
+const RUND = [110, 110, 40, 30, 30, 0, 0, 0, 40, 30, 40, 20, 0, 0, 0, 0, 25];
+const FLEE = [9, 9, 3, 2.2, 2.2, 0, 0, 0, 3, 2.5, 6, 4, 0, 0, 0, 0, 3.2];
+const WALK = [1.1, 1.1, 0.5, 0.6, 0.6, 0, 0, 0, 0.5, 0.5, 1.2, 2.2, 0, 0, 0, 0, 0.6];
+const STRIDE = [1.6, 1.6, 0.9, 1, 1, 0, 0, 0, 0.9, 1.3, 0.55, 0.35, 0, 0, 0, 0, 0.5];
+const ROAM = [40, 40, 30, 35, 35, 0, 0, 0, 30, 25, 12, 8, 0, 0, 0, 0, 3];
 // states: 0 grazing, 1 walking to a target, 2 fleeing
 function lifeTick(dt, cx, cy, cz) {
   let nl = 0;
@@ -313,6 +346,30 @@ function lifeTick(dt, cx, cy, cz) {
       const back = ((F[TIME] * 1.3 / FERRYLEN) % (2 * n)) > n;
       LI[o] = ax + (bx - ax) * f; LI[o + 1] = sin(F[TIME] * 1.3) * 0.04 - 0.05; LI[o + 2] = az + (bz - az) * f;
       LI[o + 3] = atan2(bz - az, bx - ax) + (back ? PI : 0); LI[o + 4] = 1.25; LI[o + 5] = F[TIME] * 0.38 % 1; LI[o + 6] = 1; LI[o + 7] = 0; continue;
+    }
+    if (k === KIND.STOOK) { const o = i * 8, x = LA[b + 1], z = LA[b + 2]; LI[o] = x; LI[o + 1] = H(x, z); LI[o + 2] = z; LI[o + 3] = LA[b + 3]; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
+    if (k === KIND.GROUSE) {
+      // sitting tight in the heather until you come close and low; then up with a whirr, away fast and low, a long glide
+      // down, and they settle again (state 8: 0 sitting, 1 flying, 2 gliding; 13: height above the ground)
+      let x = LA[b + 1], z = LA[b + 2], st = LA[b + 8];
+      const gy = H(x, z), dx = x - cx, dz = z - cz;
+      if (st === 0 && !lifeCalm && hypot(dx, dz) < 24 && cy - gy < 22) { st = LA[b + 8] = 1; LA[b + 9] = rr(2.2, 3.5); LA[b + 3] = atan2(dz, dx) + rr(-0.5, 0.5); GFLUSH++; }
+      if (st > 0) {
+        LA[b + 9] -= dt;
+        const sp = st === 1 ? 15 : 10, nx = x + cos(LA[b + 3]) * sp * dt, nz = z + sin(LA[b + 3]) * sp * dt;
+        if (abs(nx) < 980 && abs(nz) < 980) { x = nx; z = nz; } else LA[b + 3] += PI;
+        LA[b + 13] += ((st === 1 ? 4.5 : 0) - LA[b + 13]) * min(1, dt * (st === 1 ? 2.5 : 0.9));
+        if (LA[b + 9] <= 0 && st === 1) { st = LA[b + 8] = 2; LA[b + 9] = rr(2.5, 4); }
+        if (st === 2 && LA[b + 9] <= 0 && LA[b + 13] < 0.4) { if (H(x, z) > 2) { st = LA[b + 8] = 0; LA[b + 13] = 0; } else LA[b + 9] = 1; }
+      }
+      LA[b + 1] = x; LA[b + 2] = z;
+      const o = i * 8; LI[o] = x; LI[o + 1] = H(x, z) + LA[b + 13]; LI[o + 2] = z; LI[o + 3] = LA[b + 3]; LI[o + 4] = 1;
+      LI[o + 5] = st ? F[TIME] * 1.35 % 1 : 0; LI[o + 6] = st ? 1 : -1; LI[o + 7] = st === 1 ? 1 : st === 2 ? 0.08 : 0; continue;
+    }
+    if (k === KIND.LAMB) {
+      // a lamb keeps near its ewe: home is wherever she is; after grazing it sometimes races off in a short burst
+      const e = (LRUN[KIND.SHEEP][0] + LA[b + 15]) * LS; LA[b + 4] = LA[e + 1]; LA[b + 5] = LA[e + 2];
+      if (LA[b + 8] === 0 && LA[b + 9] < dt && rnd() < 0.35) { LA[b + 8] = 2; LA[b + 9] = rr(1, 2); LA[b + 6] = LA[b + 4] + rr(-6, 6); LA[b + 7] = LA[b + 5] + rr(-6, 6); }
     }
     if (k === KIND.WHEEL) { const o = i * 8; LI[o] = MILLW[0]; LI[o + 1] = MILLW[1]; LI[o + 2] = MILLW[2]; LI[o + 3] = PI / 2; LI[o + 4] = 1; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.VILLAGER || k === KIND.BEARER) {
@@ -332,7 +389,7 @@ function lifeTick(dt, cx, cy, cz) {
     if (k === KIND.BOAT && LA[b + 15]) { const o = i * 8; LI[o] = LA[b + 1]; LI[o + 1] = LA[b + 4]; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3]; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.BOAT) { const o = i * 8, t = F[TIME] + i * 3; LI[o] = LA[b + 1]; LI[o + 1] = sin(t * 1.3) * 0.05 - 0.05; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3] + sin(t * 0.21) * 0.15; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.EAGLE) { eagleAt(F[TIME]); const o = i * 8; LI[o] = EG[0]; LI[o + 1] = EG[1]; LI[o + 2] = EG[2]; LI[o + 3] = atan2(EG[5], EG[3]); LI[o + 4] = LA[b + 14]; LI[o + 5] = F[TIME] * 0.55 % 1; LI[o + 6] = 1; LI[o + 7] = 0.15 + 0.55 * sstep(0.75, 0.95, sin(F[TIME] * 0.23 + 3.3)); continue; }
-    const heron = k === KIND.HERON, swim = k === KIND.SWAN || k === KIND.DUCK, small = k === KIND.RABBIT || k === KIND.SQUIRREL;
+    const heron = k === KIND.HERON, swim = k === KIND.SWAN || k === KIND.DUCK, small = k === KIND.RABBIT || k === KIND.SQUIRREL || k === KIND.LAMB;
     let x = LA[b + 1], z = LA[b + 2];
     const dx = x - cx, dz = z - cz, dc = hypot(dx, dz), above = cy - (swim ? 0 : H(x, z));
     // too close: run (deer bolt, sheep trot off, birds paddle away)

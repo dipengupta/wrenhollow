@@ -380,9 +380,13 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   // the seasons: fresh green in spring, golden grass in autumn, dead straw in winter
   let ph = u.env2.y; let spr = ss(1., 0., ph); let aut = ss(1., 2., ph) * ss(3., 2., ph); let wtr = ss(2., 3., ph);
   al = mix(al, al * vec3f(.85, 1.2, .75), spr);
-  if (spr > 0.) {
-    al = mix(al, vec3f(.5, .4, .04), ss(.74, .82, vn2(p.xz * .06 + 5.) * .7 + m3 * .3) * spr * ss(.05, .25, 1. - n.y) * .8); // gorse in flower
-    al = mix(al, vec3f(.24, .22, .5), ss(.66, .78, vn2(p.xz * .035 + 11.) * .75 + m3 * .25) * ss(.35, .7, vn2(p.xz * 1.9) * .6 + vn2(p.xz * .4) * .4) * spr * ss(60., 15., p.y) * .55); // bluebells
+  if (spr > 0. && !FAR && u.sun.w < .5) {
+    // (each layer only where it can show: not in the blurred reflection or on the far hills; gorse on the slopes,
+    // bluebells low down where their patches are)
+    let gs = ss(.05, .25, 1. - n.y);
+    if (gs > 0.) { al = mix(al, vec3f(.5, .4, .04), ss(.74, .82, vn2(p.xz * .06 + 5.) * .7 + m3 * .3) * spr * gs * .8); } // gorse in flower
+    if (p.y < 60.) { let bp = ss(.66, .78, vn2(p.xz * .035 + 11.) * .75 + m3 * .25);
+      if (bp > 0.) { al = mix(al, vec3f(.24, .22, .5), bp * ss(.35, .7, vn2(p.xz * 1.9) * .6 + vn2(p.xz * .4) * .4) * spr * ss(60., 15., p.y) * .55); } } // bluebells
   }
   al = mix(al, mix(vec3f(.2, .16, .07), vec3f(.27, .2, .08), m2), aut * .65);
   al = mix(al, vec3f(.2, .18, .12) * (.8 + .4 * m2), wtr);
@@ -391,7 +395,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   // heather in bloom at the end of summer
   al = mix(al, vec3f(.21, .1, .17), ss(.55, .8, mh + .3 * (m3 - .5)) * ss(30., 80., p.y) * ss(.5, 1., ph) * ss(1.7, 1.1, ph) * .55);
   al = mix(al, vec3f(.27, .13, .05), ss(.62, .72, 1. - mh + .3 * (m2 - .5)) * (.3 + .4 * aut) * (1. - spr) * (1. - far * .7)); // bracken
-  if (near && spr > 0.) { al = mix(al, select(vec3f(.8, .75, .4), vec3f(.85, .85, .8), m3 > .5), ss(.955, .99, vn2(p.xz * 2.7)) * spr * (1. - far)); } // spring flowers
+  if (near && spr > 0. && d < 160.) { al = mix(al, select(vec3f(.8, .75, .4), vec3f(.85, .85, .8), m3 > .5), ss(.955, .99, vn2(p.xz * 2.7)) * spr * (1. - far)); } // spring flowers
   if (far > 0.) { al = mix(al, mix(vec3f(.13, .14, .07), vec3f(.17, .13, .1), ss(.3, .7, vn2(p.xz * .003))), far * .35); }
   al *= .8 + .4 * m3;
   }
@@ -405,7 +409,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
       let sc = mix(mix(vec3f(.2, .18, .13), vec3f(.3, .26, .19), ss(-5., -.5, p.y)), vec3f(.6, .52, .38), ss(-.25, .5, p.y)) * (.9 + .16 * vn2(p.xz * .7)) * (.95 + .08 * vn2(p.xz * 2.3));
       al = mix(al, sc, sand); } }
   // the gorge: scree and pebbles on the floor and the fans, the burn down the middle
-  var stream = vec3f(0.);
+  var stream = vec3f(0.); var burnW = 0.;
   if (i.rv < 40.) {
     let rd = i.rv; let above = p.y - ravF(p.z);
     let scr = ss(17., 8., rd + 3. * (m3 - .5)) * ss(22., 6., above);
@@ -418,13 +422,16 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
     al = mix(al, al * .3, ss(7., 3., rd) * ss(6., 1., abs(p.z + 39.)) * ss(18., 4., above));
     if (wet > 0.) {
       // the burn: broad, slow ripples drawn out along the flow (no fine sparkle), pale streaks of foam riding on it
-      let fz = p.z * .28 + u.cam.w * 1.6;
+      let fz = p.z * .28 + u.cam.w * 1.6 * (1. - .75 * u.env2.x);
       let rp = vec2f(vn2(vec2f(p.x * .9, fz)), vn2(vec2f(p.x * .9 + 5., fz + 3.))) - .5;
       let wn = normalize(vec3f(rp.x * .14, 1., rp.y * .1)); let V = normalize(u.cam.xyz - p);
       let fr = .03 + .6 * pow(1. - max(dot(wn, V), 0.), 5.);
       let streak = ss(.62, .85, vn2(vec2f(p.x * 1.6, p.z * .3 + u.cam.w * 1.4))) * .07;
       let wc = mix(vec3f(.02, .025, .022), skyL(reflect(-V, wn)) * .8, fr) + (u.amb.rgb + u.sunc.rgb * .3) * (streak + .3 * ss(2.45, 2.7, wob));
-      al = mix(al, vec3f(.02), wet); stream = wc * wet; n = normalize(mix(n, vec3f(0., 1., 0.), wet));
+      // in winter ice reaches in from both banks, leaving open water only in the middle of the stream
+      let ice = u.env2.x * ss(1.05, 1.9, wob + .3 * (vn2(p.xz * .6) - .5));
+      let ic = (u.amb.rgb * 1.1 + u.sunc.rgb * .35 * max(u.sun.y, 0.)) * vec3f(.72, .82, .95) * (.8 + .25 * vn2(p.xz * 2.));
+      al = mix(al, vec3f(.02), wet); stream = mix(wc, ic, ice) * wet; n = normalize(mix(n, vec3f(0., 1., 0.), wet)); burnW = wet;
     }
   }
   let snow = ss(620., 760., p.y + 140. * (m1 - .5)) * ss(.55, .3, sl);
@@ -435,7 +442,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
     let clump = ss(.45, .7, n.y + .35 * (vn2(p.xz * .3 + p.y * .2) - .5)) * ss(.3, .6, vn2(vec2f(p.x + p.z, p.y) * .08 + 2.));
     snowR = u.env2.x * rk * max(ss(.55, .8, normalize(i.n).y + .2 * (m3 - .5)), max(ledge * .35, clump * .9));
   }
-  let snowT = max(max(snow, snowL), snowR);
+  let snowT = max(max(snow, snowL), snowR) * (1. - burnW);   // no snow lies on the burn (its ice and water are drawn there)
   al = mix(al, SNOWC * (.92 + .1 * m3), snowT);
   al *= 1. - .35 * u.env2.z * (1. - snowT);
   // shadows: pushed further off faces the light only grazes, and faded on the smooth normal, so the edge of the light
@@ -667,7 +674,7 @@ struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n
     let ph = u.env2.y;
     var bc = mix(vec3f(.12, .16, .05), vec3f(.32, .26, .07), t);                                   // late summer
     bc = mix(bc, mix(vec3f(.14, .24, .05), vec3f(.26, .34, .08), t), ss(1., 0., ph));             // spring
-    if (ph < .6) { bc = mix(bc, vec3f(.82, .74, .76), ss(.62, .78, vn(i.p * 3.1)) * ss(.6, 0., ph) * .8); } // blossom
+    if (ph < .6 && length(i.p - u.cam.xyz) < 250.) { bc = mix(bc, vec3f(.82, .74, .76), ss(.62, .78, vn(i.p * 3.1)) * ss(.6, 0., ph) * .8 * ss(250., 180., length(i.p - u.cam.xyz))); } // blossom (only near: far off it is lost)
     bc = mix(bc, mix(vec3f(.36, .16, .03), vec3f(.55, .38, .05), t), ss(1.2, 2., ph));            // autumn
     al = select(mix(vec3f(.035, .07, .035), vec3f(.07, .11, .05), t), bc, birch);
     al *= .75 + .5 * i.s;
@@ -942,7 +949,19 @@ struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n
   let bat = b.w < .5; let big = b.w > 1.5;
   if (bat) { c += vec3f(sin(t * 5.1 + b.z * 40.), sin(t * 6.3 + b.z * 20.) * .6, cos(t * 4.7 + b.z * 30.)) * 3.; }
   var fw = normalize(vec3f(-sin(an) * a.w * b.y, 0., cos(an) * a.w * .7 * b.y));
-  let goose = a.w < 0.;
+  let goose = a.w < 0. && a.w > -1.5; let star = a.w < -1.5;
+  if (star) {
+    // the murmuration: a ball of birds over the loch, stretched and squashed as it goes, its layers turning at different
+    // rates so the flock folds over itself; ripples run through it
+    let T = t * .045;
+    let cen = vec3f(-230. + 110. * sin(T * 1.3), 78. + 12. * sin(T * 2.1), 380. + 90. * cos(T * .9));
+    var q = a.xyz * vec3f(1. + .6 * sin(t * .21 + 1.), .28 + .15 * sin(t * .17), 1. + .5 * cos(t * .19)) * (20. + 4. * sin(t * .3 + a.y * 3.));
+    q.y += sin(q.x * .09 + t * .35) * 7. + cos(q.z * .07 - t * .27) * 5.;   // the sheet folds and rolls
+    let ang = t * .12 + .9 * sin(t * .09 + a.y * 1.5);
+    q = vec3f(q.x * cos(ang) - q.z * sin(ang), q.y, q.x * sin(ang) + q.z * cos(ang));
+    q += vec3f(sin(t * .7 + a.y * 5.) * 3., sin(t * .5 + a.x * 4.) * 2., cos(t * .6 + a.z * 5.) * 3.);
+    c = cen + q; fw = normalize(vec3f(-q.z, .3 * sin(t + b.z * 9.), q.x) + vec3f(.001, 0., 0.));
+  }
   if (goose) {
     // geese in autumn: a V of greylags crossing from the north-east to the south-west, one pass every 80 s
     fw = normalize(vec3f(-.8, 0., .6)); let sd = vec3f(-fw.z, 0., fw.x);
@@ -954,6 +973,7 @@ struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n
   if (big) { fl = .15 + sin(t * 3.2 + b.z * 30.) * .55 * ss(.75, .95, sin(t * .23 + b.z * 11.)); }
   if (bat) { fl = sin(t * 28. + b.z * 30.) * .8; }
   if (goose) { fl = sin(t * 4.6 + b.z * 2.) * .6; }
+  if (star) { fl = sin(t * 22. + b.z * 40.) * .6; }
   let tri = vi / 3u; let k = vi % 3u; let s = select(-1., 1., tri >= 2u); let outer = (tri & 1u) == 1u;
   let sz = .55 * b.w; var p = vec3f(0.);
   let wa = vec2f(cos(fl), sin(fl)); let wb = vec2f(cos(fl * 1.6), sin(fl * 1.6));
@@ -967,12 +987,12 @@ struct VO { @builtin(position) pos: vec4f, @location(0) p: vec3f, @location(1) n
   } else { // the head
     if (k == 0u) { p = fw * sz * .9 - up * sz * .03; } else if (k == 1u) { p = fw * sz * .3 + rt * sz * .1; } else { p = fw * sz * .3 - rt * sz * .1; }
   }
-  var o: VO; o.p = c + p; o.n = normalize(up + rt * s * wa.y * select(0., 1., tri < 4u)); o.big = select(0., 1., big); o.pos = u.vp * vec4f(o.p, 1.); return o;
+  var o: VO; o.p = c + p; o.n = normalize(up + rt * s * wa.y * select(0., 1., tri < 4u)); o.big = select(0., b.w, big); o.pos = u.vp * vec4f(o.p, 1.); return o;
 }
 @fragment fn fs(i: VO) -> @location(0) vec4f {
   // rooks and bats read as black silhouettes; the eagle and the owl are brown, lit from above and below
   var n = normalize(i.n); if (dot(n, u.cam.xyz - i.p) < 0.) { n = -n; }
-  let al = select(vec3f(.012, .011, .012), vec3f(.11, .07, .04), i.big > .5);
+  let al = select(vec3f(.012, .011, .012), select(vec3f(.11, .07, .04), vec3f(.24, .085, .03), i.big > 1.9 && i.big < 2.4), i.big > .5);   // the kite is rufous
   let c = select(al * (u.sunc.rgb + u.amb.rgb), al * (u.sunc.rgb * max(dot(n, u.sun.xyz), 0.) * 1.5 + u.amb.rgb * (.6 + .4 * n.y)), i.big > .5);
   return vec4f(aerial(c, i.p), 1.);
 }
@@ -1104,6 +1124,25 @@ const HULL = array<vec3f, 30>(
   let c = lit(al, n, i.p, shadowAt(i.p, n), 1., .1, 20.);
   return vec4f(aerial(c, i.p), 1.);
 }
+// butterflies on summer days: in Hart's Meadow, the Walled Garden and by the Grey Stones; two wings that flap about the
+// body, wandering low over the grass; white, orange and blue
+@vertex fn vsBfly(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
+  let h = vec3f(h21(vec2f(f32(ii), 11.)), h21(vec2f(f32(ii), 12.)), h21(vec2f(f32(ii), 13.)));
+  let t = u.cam.w * (.35 + h.z * .25); let gi = ii % 3u;
+  let cen = select(select(vec2f(640., 262.), vec2f(166., 126.), gi == 1u), vec2f(150., 62.), gi == 0u);
+  var c = vec3f(cen.x + sin(t + h.x * 20.) * 16. + sin(t * 2.3 + h.y * 7.) * 3., 0., cen.y + cos(t * .8 + h.y * 20.) * 16. + cos(t * 2.9 + h.x * 5.) * 3.);
+  let g = vec2u(c.xz - ${CO}.); c.y = HC[g.x + g.y * CN] + .45 + .5 * h.z + abs(sin(t * 3.1 + h.x * 9.)) * .5;
+  let fw = normalize(vec3f(cos(t + h.x * 20.), 0., -.8 * sin(t * .8 + h.y * 20.)) + vec3f(.001, 0., 0.)); let rt = vec3f(-fw.z, 0., fw.x);
+  let fl = sin(u.cam.w * 26. + h.x * 50.) * .9; let s = select(-1., 1., vi >= 3u); let k = vi % 3u;
+  var p = vec3f(0.);
+  if (k == 0u) { p = fw * .07; } else if (k == 1u) { p = -fw * .07; } else { p = (rt * s * cos(fl) + vec3f(0., sin(fl), 0.)) * .11 + fw * .015; }
+  var o: VO; o.p = c + p; o.uv = vec2f(f32(k), s); o.k = vec2f(h.y, 0.); o.pos = u.vp * vec4f(o.p, 1.); return o;
+}
+@fragment fn fsBfly(i: VO) -> @location(0) vec4f {
+  let col = select(select(vec3f(.92, .92, .86), vec3f(.95, .48, .08), i.k.x > .45), vec3f(.3, .45, .95), i.k.x > .8);
+  let c = col * (u.sunc.rgb * .6 + u.amb.rgb * 1.2);
+  return vec4f(aerial(c, i.p), 1.);
+}
 // motes: warm points of light drifting along the shore below the castle
 @vertex fn vsFly(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VO {
   let h = vec3f(h21(vec2f(f32(ii), 1.)), h21(vec2f(f32(ii), 2.)), h21(vec2f(f32(ii), 3.)));
@@ -1206,7 +1245,8 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
   } else if (limb >= 6.) {
     // wings roll about the body's axis from the shoulder: a slight dihedral, beats when flapping (graze = flap depth)
     let sd = select(-1., 1., limb == 6.); let a = sd * (.1 + sin(ph * 6.) * graze * .7);
-    let d = rz(vec2f(q.z - piv.x, q.y - piv.y), a); q = vec3f(q.x, d.y + piv.y, d.x + piv.x);
+    if (walk < -.5) { q = vec3f(q.x * .6, piv.y - .02, piv.x); }   // sitting: the wing tucked away at the shoulder, under the body's cover
+    else { let d = rz(vec2f(q.z - piv.x, q.y - piv.y), a); q = vec3f(q.x, d.y + piv.y, d.x + piv.x); }
     let nn = rz(n.zy, a); n = vec3f(n.x, nn.y, nn.x);
   }
   q.y += abs(sin(ph)) * .06 * max(walk - 1., 0.);   // a bound at the gallop
@@ -1251,6 +1291,9 @@ fn rz(v: vec2f, a: f32) -> vec2f { let c = cos(a); let s = sin(a); return vec2f(
     case 50u: { al = vec3f(.12, .08, .07); }
     case 51u: { al = mix(vec3f(.3, .24, .17), vec3f(.4, .33, .24), g); }
     case 52u: { al = vec3f(.42, .16, .06) * (.8 + .35 * g); }
+    case 53u: { al = mix(vec3f(.42, .33, .14), vec3f(.62, .5, .24), fbm(i.p * vec3f(9., 2., 9.), 2)); } // straw
+    case 54u: { let mo = fbm(i.p * 22., 2); al = mix(vec3f(.12, .06, .03), vec3f(.3, .17, .08), mo) * (.8 + .3 * g); } // grouse
+    case 55u: { al = vec3f(.6, .06, .04); }
     case 16u: { al = vec3f(.05); em = vec3f(1., .62, .26) * 16. * ss(.08, .45, u.env.x) * (.85 + .15 * sin(u.cam.w * 11. + i.p.x)); }
     default: { al = vec3f(.04, .18, .1); sp = .4; }
   }
