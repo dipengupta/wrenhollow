@@ -122,6 +122,8 @@ fn hgt(p: vec2f) -> f32 {
   h = mix(h, 24. + 2. * fbm2(p * .02, 2), ss(150., 70., vd));
   // the Cairn of Keld: a low grassy burial mound east of the Grey Stones
   { let cd = length(p - vec2f(675., 242.)); h += 4.2 * ss(13.5, 0., cd) * (1. - .1 * ss(4., 0., cd)); }
+  // Fisher's Strand: a shallow cove cut into the steep south shore of the loch, a gently shelving beach
+  { let bd = length((p - vec2f(-200., 716.)) / vec2f(78., 30.)); h = mix(h, mix(-7., 3.4, ss(692., 748., p.y)), ss(1., .6, bd) * ss(690., 716., p.y)); }
   // rocky texture where it is steep
   h += 1.4 * (fbm2(p * .09, 3) - .5) * ss(4., 40., abs(h - 30.));
   return h;
@@ -357,6 +359,9 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
       bh = mix(bh, r, rf);
     }
     bh *= 1. - ss(80., 450., d); }
+  // the strand's sand is smooth: no ripple in the normal (in low sun it glitters orange and blue)
+  let bay = ss(1.05, .8, length((p.xz - vec2f(-200., 716.)) / vec2f(78., 30.))) * ss(5., 3., p.y);
+  bh *= 1. - .9 * bay;
   // the far hills: gullies and spurs in the bump, so they are not smooth domes
   let hf = ss(900., 1400., d);
   if (FAR && u.sun.w < .5) { bh += hf * (vn2(p.xz * .0035) * 14. - 5. * pow(1. - abs(vn2(p.xz * .0075 + 3.) * 2. - 1.), 2.)); }
@@ -394,6 +399,11 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   let shore = ss(2.5, .3, p.y + .8 * (m3 - .5));
   al = mix(al, mix(vec3f(.30, .27, .22), vec3f(.18, .16, .13), m3), shore);
   al = mix(al, vec3f(.13, .1, .07), ss(.5, -1.5, p.y));
+  // the strand: pale sand, darker and wet near the water, ribbed by the waves
+  { let bd = length((p.xz - vec2f(-200., 716.)) / vec2f(78., 30.));
+    if (bd < 1.05) { let sand = ss(1.02, .75, bd) * ss(5., 3., p.y) * ss(-6., -3.5, p.y);
+      let sc = mix(mix(vec3f(.2, .18, .13), vec3f(.3, .26, .19), ss(-5., -.5, p.y)), vec3f(.6, .52, .38), ss(-.25, .5, p.y)) * (.9 + .16 * vn2(p.xz * .7)) * (.95 + .08 * vn2(p.xz * 2.3));
+      al = mix(al, sc, sand); } }
   // the gorge: scree and pebbles on the floor and the fans, the burn down the middle
   var stream = vec3f(0.);
   if (i.rv < 40.) {
@@ -435,7 +445,7 @@ fn rock(p: vec3f, near: bool, f: f32) -> vec3f {
   let ao = mix(.7, 1., ss(-5., 30., p.y));
   // grass scatters light: a wrapped response (the normal leans toward the sun) keeps grazing light from picking out facets
   let nl = normalize(n + u.sun.xyz * .45 * ss(.4, .05, u.sun.y) * (1. - rk) * (1. - snowT));
-  var c = lit(al, nl, p, sh, ao, shore * .2 * (1. - snowT), 20.) + stream;
+  var c = lit(al, nl, p, sh, ao, shore * .2 * (1. - snowT) * (1. - bay), 20.) + stream;
   if (u.env.x > .05) { c += al * lampLight(p, nG); }
   clipW(p);
   return vec4f(aerial(c, p), 1.);
@@ -553,7 +563,7 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
   else if (m == 4u) { let g = fbm(p * 1.3, 3); al = mix(vec3f(.12, .36, .30), vec3f(.20, .42, .36), g) * (.8 + .3 * fbm(vec3f(uv.x * 3., uv.y * .3, 2.), 2)); sp = .25; }
   else if (m == 6u) { al = vec3f(.06, .06, .065); sp = .6; gl = 60.; }
   else if (m == 7u) { al = vec3f(.62, .58, .52) * (.8 + .25 * fbm(p * 1.7, 3)); al *= mix(.7, 1., ss(-1., 2., uv.y)); }
-  else if (m == 8u) { al = vec3f(.08, .1, .1); sp = 1.; gl = 200.; em = vec3f(.2, .35, .15) * .25; }
+  else if (m == 8u) { let bars = max(ss(.4, .47, abs(fract(uv.x * 1.5) - .5)), ss(.38, .46, abs(fract(uv.y * 1.2) - .5))); al = mix(vec3f(.08, .1, .1), vec3f(.035, .035, .03), bars); sp = mix(1., .1, bars); gl = 200.; em = vec3f(.2, .35, .15) * .25 * (1. - bars) * (1. - .9 * u.env.x); }
   else if (m == 9u) {
     // the clock: an ivory dial in a stone surround and an iron bezel, hour marks, and hands that keep the time of day
     // (the face's u runs right to left as seen from outside, so x is mirrored)
@@ -580,6 +590,26 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
     al = mix(al, vec3f(.2, .22, .14), ss(.58, .78, fbm(p * .25 + 9., 3)) * .35);
   }
   else if (m == 11u) { al = vec3f(.5, .38, .2) * (.6 + .4 * fbm(p * 4., 2)); } // thatch / straw
+  else if (m == 19u) {
+    // the beacon fire: charred iron and ash by day; after dark, flames that flicker and climb
+    let fl = .6 + .3 * sin(u.cam.w * 9. + p.y * 7.) * sin(u.cam.w * 13.7 + p.x * 9.) + .3 * vn2(vec2f(p.y * 5. - u.cam.w * 6., p.x * 4. + p.z * 3.));
+    al = vec3f(.04, .03, .025); em = mix(vec3f(1., .28, .05), vec3f(1., .72, .32), ss(-.3, .6, n.y) * fl) * fl * mix(.6, 30., ss(.15, .5, u.env.x));
+  }
+  else if (m == 20u) {
+    // fruit trees: blossom in spring, green in summer, apples among yellowing leaves in autumn, bare twigs in winter
+    let ph = u.env2.y; let nn = fbm(p * 2.3, 2); var c = vec3f(.12, .2, .06) * (.7 + .6 * nn);
+    if (ph < .5) { let bl = ss(.3, .7, fbm(p * 5.3, 2) * .6 + nn * .4); c = mix(vec3f(.26, .36, .14), mix(vec3f(.95, .62, .74), vec3f(.97, .86, .88), ss(.45, .95, nn)), bl * .85) * (.85 + .2 * nn); }
+    else if (ph > 1.5 && ph < 2.5) { c = mix(vec3f(.24, .22, .07), c, .45) * (.8 + .4 * nn); c = mix(c, vec3f(.55, .07, .04), ss(.86, .9, h31(floor(p * 4.)))); }
+    else if (ph > 2.5) { c = vec3f(.12, .1, .085) * (.6 + .6 * nn); }
+    al = c * (.75 + .4 * ss(-.2, .8, n.y));
+  }
+  else if (m == 21u) {
+    // fishing nets hung to dry: dark twine in a diamond mesh
+    let g = vec2f(uv.x * 26. + uv.y * 12., uv.x * 26. - uv.y * 12.); let ln = max(ss(.36, .5, abs(fract(g.x) - .5)), ss(.36, .5, abs(fract(g.y) - .5)));
+    al = mix(vec3f(.05, .045, .035), vec3f(.36, .3, .2), ln) * (.85 + .3 * vn2(uv * vec2f(9., 3.)));
+  }
+  else if (m == 23u) { al = mix(vec3f(.12, .14, .06), vec3f(.2, .2, .08), fbm(p * 1.7, 3)) * (.75 + .35 * vn(p * 6.)); } // turf
+  else if (m == 22u) { al = mix(vec3f(.045, .032, .022), vec3f(.1, .075, .05), fbm(p * 3., 2)); } // dark earth, peat
   else if (m == 18u) {
     // pine canopy: dark blue-green needles in clumps, lighter where the sun catches the top
     al = mix(vec3f(.03, .06, .04), vec3f(.07, .11, .06), fbm(p * 1.4, 2)) * (.7 + .5 * ss(-.2, .8, n.y));
@@ -595,7 +625,7 @@ fn windowCol(p: vec3f, uv: vec2f, fl: f32, fwu: vec2f, tr: bool) -> vec4f {
   // winter: snow on roofs, sills and wall tops; rain: darker, glossier stone and slate
   let up = normalize(i.n).y * select(-1., 1., dot(normalize(i.n), n) > 0.);
   if ((u.env2.x > 0. || u.env2.z > 0.) && m != 2u && m != 10u && m != 14u && m != 15u && m != 9u && m != 8u) {
-    var sn = 0.; if (u.env2.x > 0.) { sn = u.env2.x * ss(select(.62, .3, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u), select(.85, .5, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u), up + .15 * (vn(p * .9) - .5)); }
+    var sn = 0.; if (u.env2.x > 0.) { sn = u.env2.x * ss(select(.62, .3, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u || m == 20u || m == 22u || m == 23u), select(.85, .5, m == 1u || m == 4u || m == 11u || m == 3u || m == 18u || m == 20u || m == 22u || m == 23u), up + .15 * (vn(p * .9) - .5)); }
     al = mix(al * (1. - .3 * u.env2.z), SNOWC, sn);
     sp = mix(sp + u.env2.z * .4, .25, sn); gl = mix(select(gl, 60., u.env2.z > .3), 20., sn);
   }

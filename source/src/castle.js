@@ -449,7 +449,7 @@ function buildCastle() {
     }
     box(x + ex * hl * 0.6, z + ez * hl * 0.6, ex, ez, 0.5, 0.5, y0 + wh, y0 + wh + rh + 1.2, 0, 6);
     COLB.push([x, z, ex, ez, hl + 0.5, hw + 0.6, y0 - 2, y0 + wh + rh]);
-    VSMOKE.push(x + ex * hl * 0.6, y0 + wh + rh + 1.3, z + ez * hl * 0.6);
+    VSMOKE.push(x + ex * hl * 0.6, y0 + wh + rh + 1.3, z + ez * hl * 0.6); COTS.push(x, z);
   }
   end();
   begin();
@@ -650,11 +650,193 @@ function buildCastle() {
   // the village church
   tower(286, -470, H(286, -470), 3.5, 16, { n: 4, roof: 'spire', rh: 4 });
   hall(286, -462, 296, -440, 9, H(292, -450), 8, { rh: 6, dormers: false });
+
+  // ======================================================================== phase 5: farms, the loch shore, the garden
+  // a small rural building: walls of `wall`, a pitched roof of `roof` (gables in the wall material), windows lit at night
+  const house = (x, z, a, hl, hw, wh, wall, roof, o = {}) => {
+    const ex = cos(a), ez = sin(a), px = -ez, pz = ex, y0 = groundMin(x, z, max(hl, hw)) + 3, rh = hw * (o.pitch ?? 1.15);
+    box(x, z, ex, ez, hl, hw, y0 - 2, y0 + wh, wall, -1);
+    for (const s of [-1, 1]) {
+      const A = [x - ex * (hl + 0.35) + px * (hw + 0.45) * s, y0 + wh - 0.15, z - ez * (hl + 0.35) + pz * (hw + 0.45) * s], B = [x + ex * (hl + 0.35) + px * (hw + 0.45) * s, y0 + wh - 0.15, z + ez * (hl + 0.35) + pz * (hw + 0.45) * s];
+      const C = [x + ex * (hl + 0.35), y0 + wh + rh, z + ez * (hl + 0.35)], D = [x - ex * (hl + 0.35), y0 + wh + rh, z - ez * (hl + 0.35)];
+      m.quad(A, B, C, D, roof, 0, 0, 2 * hl, 0, 2 * hl, 3, 0, 3);
+      const k = m.nv - 4; if (m.b[k * 24 + 12] * px * s + m.b[k * 24 + 14] * pz * s < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(k + j) * 24 + 12 + c] *= -1;
+      const gx = x + ex * hl * s, gz = z + ez * hl * s;
+      m.quad([gx - px * hw, y0 + wh, gz - pz * hw], [gx + px * hw, y0 + wh, gz + pz * hw], [gx, y0 + wh + rh - 0.1, gz], [gx, y0 + wh + rh - 0.1, gz], wall, 0, y0 + wh, 2 * hw, y0 + wh, hw, y0 + wh + rh, hw, y0 + wh + rh);
+      const k2 = m.nv - 4; if (m.b[k2 * 24 + 12] * ex * s + m.b[k2 * 24 + 14] * ez * s < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(k2 + j) * 24 + 12 + c] *= -1;
+      for (let w = 0; w < (o.win ?? 1); w++) { const q = (o.win ?? 1) === 1 ? 0.35 * s : (w ? 0.45 : -0.45); win(x + ex * hl * q + px * hw * s, y0 + 0.9, z + ez * hl * q + pz * hw * s, px * s, pz * s, 0.75, 1.0, o.lit ?? rnd() < 0.8); }
+    }
+    win(x + ex * hl, y0 - 0.05, z + ez * hl, ex, ez, 0.95, 1.9, false);                                   // the door
+    if (o.smoke) { const cx = x - ex * hl * 0.85, cz = z - ez * hl * 0.85; box(cx, cz, ex, ez, 0.4, 0.4, y0 + wh, y0 + wh + rh * 0.8 + 0.9, 13, 13); VSMOKE.push(cx, y0 + wh + rh * 0.8 + 1, cz); }
+    COLB.push([x, z, ex, ez, hl + 0.5, hw + 0.6, y0 - 2, y0 + wh + rh]);
+    return y0;
+  };
+  // a drystone wall from a to b, knee to shoulder high, following the ground in short lengths; skip(x, z) leaves gaps
+  const dyke = (ax, az, bx, bz, ht, mat = 17, skip = null) => {
+    const L = hypot(bx - ax, bz - az), n = max(1, round(L / 3)), ex = (bx - ax) / L, ez = (bz - az) / L;
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t; if (skip && skip(x, z)) continue;
+      const g = H(x, z), top = g + ht + rr(-0.06, 0.06); box(x, z, ex, ez, L / n / 2 + 0.05, 0.32, g - 0.6, top, mat, mat);
+      // the cope: a row of rough stones set on edge along the top, so the wall's line is broken, not ruled
+      // stones of uneven width, packed tight, uneven in height, some set slightly askew
+      let f = -0.5 * (L / n); const end = 0.5 * (L / n);
+      while (f < end - 0.12) { const w = min(rr(0.22, 0.6), end - f), cx = x + ex * (f + w / 2), cz = z + ez * (f + w / 2), sk = rr(-0.12, 0.12); box(cx, cz, ex + sk * ez, ez - sk * ex, w / 2, 0.2 + rr(-0.05, 0.06), top - 0.03, top + rr(0.12, 0.38), 17, 17); f += w + 0.02; }
+    }
+  };
+  // a round hay stack: a drum with a conical thatched top
+  const stack = (x, z, r, ht) => { const g = H(x, z) - 0.2; prism(x, z, r, r * 1.06, g, g + ht, 12, 11); blob(x, g + ht - 0.1, z, r * 1.12, r * 0.95, r * 1.12, 11, 12, 5); };
+  // stacked peats drying: a stepped pile of dark bricks
+  const peats = (x, z, a, l) => { const ex = cos(a), ez = sin(a), px = -ez, pz = ex, g = H(x, z) - 0.05; for (let k = 0; k < 4; k++) { const n = round((l - k * 0.35) / 0.42); for (let i = 0; i < n; i++) for (const s of [-1, 1]) { if (k === 3 && s > 0) continue; const u = (i - (n - 1) / 2) * 0.42, v = s * (0.24 - k * 0.06) * (k === 3 ? 0 : 1); box(x + ex * u + px * v, z + ez * u + pz * v, ex + rr(-0.15, 0.15), ez, 0.19, 0.11, g + k * 0.24, g + (k + 1) * 0.24 - 0.02, 22, 22); } } };
+  // a farmstead: longhouse, byre, a stackyard and peats inside a drystone enclosure
+  const farm = (cx, cz, a, seed, whitewash) => {
+    rseed(seed); begin();
+    const ex = cos(a), ez = sin(a), px = -ez, pz = ex;
+    house(cx, cz, a, 7, 3, 3, 7, 11, { win: 2, smoke: true, lit: true });
+    house(cx + px * 10 + ex * 2, cz + pz * 10 + ez * 2, a, 5, 2.6, 2.6, whitewash ? 0 : 13, 1, { win: 0 });
+    for (let k = 0; k < 3; k++) stack(cx - ex * (6 + k * 4.4) - px * 9, cz - ez * (6 + k * 4.4) - pz * 9, 1.7, 1.8);
+    peats(cx + ex * 10 - px * 6, cz + ez * 10 - pz * 6, a, 2.2);
+    end();
+    begin();
+    const R = [[-16, -15], [16, -15], [16, 18], [-16, 18]].map(([u, v]) => [cx + ex * u + px * v, cz + ez * u + pz * v]);
+    for (let i = 0; i < 4; i++) { const [x0, z0] = R[i], [x1, z1] = R[(i + 1) % 4]; dyke(x0, z0, x1, z1, 1.1, 17, (x, z) => i === 0 && hypot(x - (x0 + x1) / 2, z - (z0 + z1) / 2) < 2.2); }
+    end(); OBJS[OBJS.length - 1].wall = true;
+  };
+  farm(-590, -222, 0.35, 501, true);    // Blackmyre
+  farm(-822, 152, -0.6, 503, false);    // Westerhill
+
+  // the Summer Shielings: three low turf-roofed huts and a round stone fold, high above Kilwren
+  rseed(507); begin();
+  for (const [x, z, a] of [[372, -598, 0.3], [386, -584, 1.2], [362, -578, 2.4]]) house(x, z, a, 2.8, 2, 1.3, 17, 23, { pitch: 0.55, win: 1, lit: false });
+  { const fx = 398, fz = -603; for (let i = 0; i < 20; i++) { const a0 = i / 20 * TAU, a1 = (i + 1) / 20 * TAU; if (i === 6) continue; dyke(fx + cos(a0) * 7.5, fz + sin(a0) * 7.5, fx + cos(a1) * 7.5, fz + sin(a1) * 7.5, 1.2); } }
+  end();
+
+  // Beacon Knowe: a cairn on the gorge's east rim, an iron fire-basket on a post at its top, burning after dark
+  rseed(509); begin();
+  {
+    const x = 310, z = -70, g = H(x, z) - 0.5;
+    for (let k = 0; k < 5; k++) { const rk = 2.9 - k * 0.6, n = max(3, round(rk * 4)); for (let i = 0; i < n; i++) { const a = (i + k * 0.5) / n * TAU + rr(-0.15, 0.15); blob(x + cos(a) * rk, g + 0.35 + k * 0.5, z + sin(a) * rk, rr(0.45, 0.65), rr(0.3, 0.45), rr(0.4, 0.6), 17, 6, 3); } }
+    blob(x, g + 2.6, z, 0.7, 0.45, 0.7, 17, 6, 3);
+    // stones scattered across a heathery glade (the stones' spread keeps the trees back, so the fire shows from afar)
+    for (let i = 0; i < 34; i++) { const a = i < 12 ? rr(0, TAU) : (i - 12) / 22 * TAU, r = i < 12 ? rr(3, 5) : rr(16, 44), sx = x + cos(a) * r, sz = z + sin(a) * r, gy = H(sx, sz); box(sx, sz, cos(a), sin(a), rr(0.25, 0.5), rr(0.2, 0.4), gy - 0.2, gy + rr(0.15, 0.45), 13, 13); }
+    const T = g + 3.9;   // the brazier sits squat on a short stout post at the cairn's top
+    limb([x, g + 2.4, z], [x, T, z], 0.3, 0.26, 3, 8); for (const [dx, dz] of [[-0.9, 0], [0.45, 0.8], [0.45, -0.8]]) limb([x + dx, g + 2.5, z + dz], [x, T - 0.1, z], 0.08, 0.07, 6, 4);
+    // the brazier: an open iron cage of bars between two rings, flames standing up out of it
+    prism(x, z, 0.2, 0.62, T - 0.15, T + 0.1, 10, 6); for (const y of [T + 0.12, T + 0.9]) prism(x, z, 0.82, 0.82, y, y + 0.07, 12, 6);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; limb([x + cos(a) * 0.62, T + 0.08, z + sin(a) * 0.62], [x + cos(a) * 0.86, T + 1.02, z + sin(a) * 0.86], 0.035, 0.035, 6, 4); }
+    blob(x, T + 0.55, z, 0.6, 0.5, 0.6, 19, 9, 4);
+    for (let i = 0; i < 7; i++) { const a = i / 7 * TAU + 0.4, r = i ? 0.38 : 0; blob(x + cos(a) * r, T + 1.1 + (i ? rr(-0.1, 0.15) : 0.4), z + sin(a) * r, i ? 0.22 : 0.3, i ? rr(0.5, 0.7) : 0.95, i ? 0.22 : 0.3, 19, 6, 3); }
+    LAMPS.push(x, T + 1.2, z, 2);
+    VSMOKE.push(x, T + 1.6, z); BEACON[0] = x; BEACON[1] = T + 0.8; BEACON[2] = z;
+    COLC.push([x, z, 3.2, T + 1.2]);
+  }
+  end();
+
+  // the Crannog: a thatched roundhouse on a timber platform raised on piles out in the shallows, a walkway to the shore
+  rseed(511); begin();
+  {
+    const x = -330, z = 699, top = 1.1;
+    prism(x, z, 7, 7, top - 0.35, top, 16, 3); spire(x, z, 7, top, 0.01, 16, 3);
+    for (let i = 0; i < 20; i++) { const a = i / 20 * TAU + rr(-0.05, 0.05), r = i & 1 ? 6.6 : 4; prism(x + cos(a) * r, z + sin(a) * r, 0.17, 0.15, -4, top - 0.3 + rr(0, 0.5), 5, 3); }
+    prism(x, z, 4.4, 4.4, top, top + 2.1, 18, 3); spire(x, z, 5.6, top + 2.0, 4.4, 18, 11);
+    win(x + 4.45 * cos(1.75), top, z + 4.45 * sin(1.75), cos(1.75), sin(1.75), 1, 1.7, false);
+    VSMOKE.push(x, top + 6.5, z);
+    // the walkway: planks on posts, from the platform to the beach
+    const z0 = z + 7, z1 = 721, n = 8;
+    box(x - 0.2, (z0 + z1) / 2, 0, 1, (z1 - z0) / 2, 0.75, top - 0.25, top, 3, 3);
+    for (let k = 0; k <= n; k++) for (const s of [-0.8, 0.8]) { const zz = z0 + (z1 - z0) * k / n; prism(x - 0.2 + s, zz, 0.11, 0.1, min(H(x, zz), 0) - 2, top + 0.6, 5, 3); }
+    COLC.push([x, z, 7.2, top + 6.4]);
+    COLB.push([x - 0.2, (z0 + z1) / 2, 0, 1, (z1 - z0) / 2, 0.9, -3, top + 0.6]);
+  }
+  end();
+
+  // Fisher's Strand: a bothy at the back of the beach (the cove itself is cut into the terrain), net poles with nets
+  // hung to dry, and a rowing boat drawn up (one of the animals' boats)
+  rseed(513); begin();
+  {
+    house(-170, 731, 0.12, 4.2, 2.6, 2.4, 7, 11, { win: 1, smoke: true, lit: true });
+    for (let k = 0; k < 3; k++) {
+      const x0 = -215 + k * 9, z = 731 + k * 1.5, gy = H(x0, z);
+      for (const d of [0, 3.6]) limb([x0 + d, gy - 0.4, z], [x0 + d, gy + 2.3, z], 0.08, 0.07, 3, 5);
+      limb([x0, gy + 2.15, z], [x0 + 3.6, gy + 2.15, z], 0.04, 0.04, 3, 4);
+      // the net hangs from the rail in loose pleats, its foot ragged and sagging toward the middle
+      const NP = 8; for (let j = 0; j < NP; j++) { const xa = x0 + 0.1 + 3.4 * j / NP, xb = x0 + 0.1 + 3.4 * (j + 1) / NP, za = z + (j & 1 ? 0.12 : -0.12), zb = z + (j & 1 ? -0.12 : 0.12), ya = gy + 0.35 + 0.35 * sin(PI * j / NP) + rr(-0.1, 0.1), yb = gy + 0.35 + 0.35 * sin(PI * (j + 1) / NP) + rr(-0.1, 0.1);
+        for (const s of [1, -1]) { if (s > 0) m.quad([xa, ya, za], [xb, yb, zb], [xb, gy + 2.12, z], [xa, gy + 2.12, z], 21, j / NP, 0, (j + 1) / NP, 0, (j + 1) / NP, 1, j / NP, 1); else m.quad([xb, yb, zb], [xa, ya, za], [xa, gy + 2.12, z], [xb, gy + 2.12, z], 21, (j + 1) / NP, 0, j / NP, 0, j / NP, 1, (j + 1) / NP, 1); } }
+    }
+  }
+  end();
+
+  // the Walled Garden: below the castle, south of Hart's Meadow. Stone walls with a dressed coping and a gateway to the
+  // north, beds of dark earth, a lean-to glasshouse against the north wall, bee skeps on a bench, and an orchard
+  rseed(515); begin();
+  {
+    const cx = 166, cz = 126, a = 0.08, ex = cos(a), ez = sin(a), px = -ez, pz = ex, hl = 19, hw = 13, ht = 2.6;
+    const P = (u, v) => [cx + ex * u + px * v, cz + ez * u + pz * v];
+    const sides = [[[-hl, -hw], [hl, -hw]], [[hl, -hw], [hl, hw]], [[hl, hw], [-hl, hw]], [[-hl, hw], [-hl, -hw]]];
+    sides.forEach(([[u0, v0], [u1, v1]], i) => {
+      const [x0, z0] = P(u0, v0), [x1, z1] = P(u1, v1), gate = P(0, -hw), L = hypot(x1 - x0, z1 - z0), n = round(L / 4), dx = (x1 - x0) / L, dz = (z1 - z0) / L;
+      for (let k = 0; k < n; k++) { const t = (k + 0.5) / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t; if (i === 0 && hypot(x - gate[0], z - gate[1]) < 1.8) continue; const g = H(x, z); box(x, z, dx, dz, L / n / 2 + 0.02, 0.32, g - 0.8, g + ht, 0, -1); box(x, z, dx, dz, L / n / 2 + 0.06, 0.4, g + ht, g + ht + 0.2, 5, 5); }
+    });
+    for (const s of [-1, 1]) { const [x, z] = P(s * 2.1, -hw), g = H(x, z); box(x, z, ex, ez, 0.45, 0.45, g - 0.5, g + ht + 0.6, 5, 5); spire(x, z, 0.5, g + ht + 0.6, 0.7, 4, 5, PI / 4 + a); }
+    // beds: long low strips of earth with grass paths between
+    for (let r = 0; r < 4; r++) { const [x, z] = P(-6, -7 + r * 4), g = H(x, z); box(x, z, ex, ez, 10, 1.1, g - 0.4, g + 0.05, 22, 22);
+      for (const v of [-0.5, 0.5]) for (let k = 0; k < 16; k++) { const [qx, qz] = P(-15.4 + k * 1.25, -7 + r * 4 + v); if (r === 3 && k > 9) continue; blob(qx, H(qx, qz) + 0.12, qz, 0.32, 0.22, 0.32, r & 1 ? 18 : 23, 6, 3); } }
+    // the lean-to glasshouse along the inside of the north wall (facing south into the sun)
+    { const [x, z] = P(-8, hw - 1.6), g = H(x, z); box(x, z, ex, ez, 8, 1.3, g - 0.3, g + 0.7, 0, 0);
+      const A = P(-16, hw - 2.9), B = P(0, hw - 2.9), C = P(0, hw - 0.3), D = P(-16, hw - 0.3);
+      m.quad([A[0], g + 0.7, A[1]], [B[0], g + 0.7, B[1]], [B[0], g + 2.4, B[1]], [A[0], g + 2.4, A[1]], 8, 0, 0, 16, 0, 16, 1.7, 0, 1.7);
+      m.quad([A[0], g + 2.4, A[1]], [B[0], g + 2.4, B[1]], [C[0], g + 3.4, C[1]], [D[0], g + 3.4, D[1]], 8, 0, 0, 16, 0, 16, 2.8, 0, 2.8); }
+    // bee skeps on a bench by the east wall
+    { const [bx, bz] = P(hl - 2, 4), g = H(bx, bz); box(bx, bz, px, pz, 3, 0.35, g, g + 0.55, 3, 3); for (let k = 0; k < 5; k++) { const [x, z] = P(hl - 2, 1.6 + k * 1.2); prism(x, z, 0.32, 0.36, g + 0.55, g + 0.85, 8, 11); spire(x, z, 0.36, g + 0.85, 0.42, 8, 11); } }
+    // the orchard: eight fruit trees in the east half
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
+      const [x, z] = P(6.5 + c * 3.9, -6.5 + r * 8.5 + (c & 1) * 1.4), g = H(x, z) - 0.2, tx = x + rr(-0.3, 0.3), tz = z + rr(-0.3, 0.3);
+      limb([x, g, z], [tx, g + 1.9, tz], 0.2, 0.14, 3, 6);
+      for (let k = 0; k < 3; k++) { const b = k / 3 * TAU + rr(0, 1); limb([tx, g + 1.8, tz], [tx + cos(b) * 1.1, g + 2.8, tz + sin(b) * 1.1], 0.1, 0.06, 3, 4); }
+      blob(tx, g + 3.3, tz, rr(1.9, 2.2), rr(1.4, 1.65), rr(1.9, 2.2), 20, 10, 5);
+    }
+    COLB.push([cx, cz, ex, ez, hl + 0.5, hw + 0.5, H(cx, cz) - 3, H(cx, cz) + ht + 3]);
+  }
+  end();
+
+  // Kilwren Kirkyard: around the village church, a low wall, a lychgate on the lane, a dark yew and leaning headstones
+  // a headstone: a thin slab, rounded at the top, leaning back a little about its foot
+  const slab = (x, z, a, w, h, t, lean, mat = 5) => {
+    const ex = cos(a), ez = sin(a), nx = -ez, nz = ex, g = H(x, z) - 0.15, cl = cos(lean), sl = sin(lean);
+    const P = (u, v, y) => [x + ex * u + nx * (v + y * sl), g + y * cl, z + ez * u + nz * (v + y * sl)];
+    const ring = [[-w, 0], [w, 0], [w, h * 0.82], [w * 0.7, h * 0.95], [0, h], [-w * 0.7, h * 0.95], [-w, h * 0.82]];
+    for (const s of [-1, 1]) for (let i = 1; i + 1 < ring.length; i++) { const A = P(ring[0][0], s * t, ring[0][1]), B = P(ring[i][0], s * t, ring[i][1]), C = P(ring[i + 1][0], s * t, ring[i + 1][1]); if (s > 0) m.quad(A, B, C, C, mat, 0, 0, 1, 0, 1, 1, 1, 1); else m.quad(A, C, B, B, mat, 0, 0, 1, 0, 1, 1, 1, 1); }
+    for (let i = 0; i < ring.length; i++) { const p = ring[i], q = ring[(i + 1) % ring.length]; m.quad(P(p[0], -t, p[1]), P(q[0], -t, q[1]), P(q[0], t, q[1]), P(p[0], t, p[1]), mat, 0, 0, 1, 0, 1, 1, 0, 1); const k = m.nv - 4, mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2 - h * 0.45; if (m.b[k * 24 + 12] * (ex * mx) + m.b[k * 24 + 13] * my + m.b[k * 24 + 14] * (ez * mx) < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(k + j) * 24 + 12 + c] *= -1; }
+  };
+  rseed(517); begin();
+  {
+    const laneD = (x, z) => { let d = 1e9; for (let i = 0; i <= 60; i++) { const t = i / 60; d = min(d, hypot(x - (mix(170, 330, t) + 25 * sin(t * 7)), z - (mix(-380, -500, t) + 30 * cos(t * 5)))); } return d; };
+    const cotD = (x, z) => { let d = 1e9; for (let i = 0; i < COTS.length; i += 2) d = min(d, hypot(x - COTS[i], z - COTS[i + 1])); return d; };
+    const church = (x, z, r) => x > 280 - r && x < 301 + r && z > -474 - r && z < -437 + r;
+    const ok = (x, z, r) => !church(x, z, r) && cotD(x, z) > 6.5 + r && laneD(x, z) > 3.5 + r;
+    const X0 = 266, X1 = 318, Z0 = -470, Z1 = -418;
+    for (const [ax, az, bx, bz] of [[X0, Z0, X1, Z0], [X1, Z0, X1, Z1], [X1, Z1, X0, Z1], [X0, Z1, X0, Z0]]) dyke(ax, az, bx, bz, 0.9, 13, (x, z) => !ok(x, z, 0.5) || (az === Z0 && bz === Z0 && abs(x - 292) < 1.6));
+    // the lychgate over the south entrance
+    { const g = H(292, Z0); for (const s of [-1, 1]) for (const d of [-0.9, 0.9]) limb([292 + s * 1.5, g - 0.3, Z0 + d], [292 + s * 1.5, g + 2.4, Z0 + d], 0.1, 0.09, 3, 5);
+      for (const d of [-1, 1]) m.quad([290.1, g + 2.4, Z0 + d * 1.5], [293.9, g + 2.4, Z0 + d * 1.5], [293.9, g + 3.5, Z0], [290.1, g + 3.5, Z0], 1, 0, 0, 3, 0, 3, 1, 0, 1);
+      const k = m.nv - 8; for (const kk of [k, k + 4]) if (m.b[kk * 24 + 13] < 0) for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) m.b[(kk + j) * 24 + 12 + c] *= -1; }
+    // the yew, old and dark, in the north-east corner
+    { const x = 311, z = -424, g = H(x, z); limb([x, g - 0.3, z], [x + 0.2, g + 1.8, z], 0.45, 0.35, 3, 7); blob(x + 0.1, g + 3, z, 3.4, 2.7, 3.2, 18, 11, 5); blob(x - 0.8, g + 1.9, z + 0.6, 2.6, 1.6, 2.5, 18, 9, 4); }
+    // headstones in loose rows, facing east, some leaning
+    let n = 0;
+    for (let r = 0; r < 9 && n < 34; r++) for (let c = 0; c < 10 && n < 34; c++) {
+      const x = X0 + 3 + c * 4.9 + rr(-0.6, 0.6), z = Z1 - 3 - r * 5.4 + rr(-0.5, 0.5);
+      if (!ok(x, z, 0.8) || hypot(x - 311, z + 424) < 4.5 || rnd() < 0.3) continue;
+      slab(x, z, PI / 2 + rr(-0.1, 0.1), rr(0.34, 0.46), rr(0.8, 1.25), rr(0.07, 0.1), rr(-0.18, 0.12), rnd() < 0.7 ? 5 : 17); n++;
+    }
+  }
+  end(); OBJS[OBJS.length - 1].wall = true;
   return m;
 }
 const VSMOKE = []; // chimney tops in the village
 const LAMPS = []; // lanterns: x, y, z, group (0 lane, 1 viaduct, 2 the rest)
 const MILLW = [197.6, 22, -285]; // the mill wheel's axle
+const BEACON = [310, 90, -70]; // the beacon's fire
+const COTS = []; // the village cottages' centres (x, z), so later building keeps clear of them
 const BANS = []; // banner poles: x, top y, z, seed
 const FALLS = [200, 16, -41, 199, 4, -36]; // waterfall lip and foot (set from the height field)
 const RAVSTEP = -40; // where the burn drops over the step in Corrie Gorge (z)

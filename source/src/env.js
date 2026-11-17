@@ -73,4 +73,12 @@ const PLACES = [
   { name: 'The Glen Mill', tag: [-7, -1.2], at: [208, 24, -285], view: [186, 27, -298, 205, 23, -285], r: 45, sub: 'A whitewashed mill, its wheel turning under the lade' },
   { name: 'Dun Corran', at: [-300, 58, -560], view: [-258, 66, -522, -300, 55, -560], r: 60, sub: 'An Iron Age broch, broken down on its southern side' },
   { name: 'Ardlach', tag: [4, 2.2], at: [-232, 44, -492], view: [-205, 50, -468, -232, 43, -492], r: 40, sub: 'A roofless croft, one gable still standing' },
+  { name: 'The Crannog', tag: [-6, -0.8], at: [-330, 4, 699], view: [-298, 13, 672, -330, 3, 700], r: 40, sub: 'An Iron Age roundhouse raised on piles out in the water' },
+  { name: "Fisher's Strand", tag: [4, 2], at: [-195, 3, 728], view: [-150, 15, 690, -198, 2, 730], r: 60, sub: 'A sandy cove, nets hung to dry, a boat drawn up' },
+  { name: 'Blackmyre', at: [-590, 36, -222], view: [-540, 50, -178, -590, 34, -222], r: 60, sub: 'A farm on the western slopes, its stacks of hay and peat' },
+  { name: 'Westerhill', at: [-822, 38, 152], view: [-872, 50, 112, -822, 36, 152], r: 60, sub: 'The farthest farm, where the sheep graze up to the forest' },
+  { name: 'The Summer Shielings', at: [380, 75, -590], view: [362, 82, -566, 382, 73, -592], r: 50, sub: 'Turf-roofed huts on the high pasture, used in summer' },
+  { name: 'Beacon Knowe', at: [310, 96, -70], view: [296, 99, -56, 310, 92, -70], r: 40, sub: 'A cairn on the rim of the gorge. Its fire burns after dark' },
+  { name: 'The Walled Garden', tag: [-7, 2.6], at: [166, 16, 126], view: [138, 30, 92, 168, 14, 128], r: 45, sub: 'Beds of earth, a glasshouse, bee skeps and an orchard' },
+  { name: 'Kilwren Kirkyard', tag: [6, 2.6], at: [292, 26, -445], view: [260, 38, -412, 292, 26, -447], r: 40, sub: 'Leaning headstones around the village church, and an old yew' },
 ];

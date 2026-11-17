@@ -236,11 +236,12 @@ function makeLife() {
   for (const [x, z] of [[-170, 250], [-330, 360], [40, 270], [-470, 440]]) herd(KIND.SWAN, x, z, 2, 12, water);
   for (const [x, z] of [[-120, 300], [-250, 220], [-420, 330]]) herd(KIND.DUCK, x, z, 5, 10, water);
   byKind.push([[0, 0, 0, 0]]);
-  byKind.push([[-126, 172, 0.6, 0], [-139, 166, 2.1, 0], [-318, 306, 4, 0]]);
+  byKind.push([[-126, 172, 0.6, 0], [-139, 166, 2.1, 0], [-318, 306, 4, 0], [-232, 725, 1.35, 1]]);   // the last is drawn up on Fisher's Strand
   byKind.push([[FERRY[0], FERRY[1], 0, 0]]);
   const herons = []; for (const [cx, cz] of [[-230, 205], [70, 215], [-420, 380], [-30, 205]]) for (let k = 0; k < 200; k++) { const x = cx + rr(-40, 40), z = cz + rr(-40, 40), h = H(x, z); if (h > -0.6 && h < -0.15 && slope(x, z) < 0.3) { herons.push([x, z, x, z]); break; } }
   byKind.push(herons);
-  byKind.push([]); herd(KIND.CATTLE, -265, -505, 6, 35, land); herd(KIND.CATTLE, 245, -235, 4, 22, land);
+  byKind.push([]); herd(KIND.CATTLE, -265, -505, 6, 35, land); herd(KIND.CATTLE, 245, -235, 4, 22, land); herd(KIND.CATTLE, -560, -185, 4, 22, land);
+  herd(KIND.SHEEP, -800, 185, 6, 25, land); herd(KIND.SHEEP, 400, -560, 5, 22, land);
   byKind.push([]); herd(KIND.RABBIT, 640, 262, 6, 26, land); herd(KIND.RABBIT, 150, 62, 4, 25, land);
   // squirrels at the forest edge: each starts beside a tree near one of these spots
   const treeNear = (x, z, r) => { for (let i = 0; i < TW.n; i++) if (abs(TW.data[i * 8] - x) < r && abs(TW.data[i * 8 + 2] - z) < r) return true; return false; };
@@ -259,7 +260,7 @@ function makeLife() {
         // route, distance along it, direction, pause; the scale's last digits pick a coat colour
         const o = LN * LS; LA[o] = k; LA[o + 4] = hx; LA[o + 5] = rr(0, ROUTEL[hx]); LA[o + 8] = rnd() < 0.5 ? 1 : -1; LA[o + 9] = 0; LA[o + 14] = 1 + 0.0025 * (LN % 4); LN++; continue;
       }
-      if (k === KIND.BOAT) { LA[LN * LS] = k; LA[LN * LS + 1] = x; LA[LN * LS + 2] = z; LA[LN * LS + 3] = hx; LA[LN * LS + 14] = 1.25; LN++; continue; }
+      if (k === KIND.BOAT) { LA[LN * LS] = k; LA[LN * LS + 1] = x; LA[LN * LS + 2] = z; LA[LN * LS + 3] = hx; LA[LN * LS + 14] = 1.25; LA[LN * LS + 15] = hz; LA[LN * LS + 4] = hz ? H(x, z) + 0.12 : 0; LN++; continue; }
       if (LN >= LIFEMAX) break;
       const a = LA.subarray(LN * LS, LN * LS + LS);
       a[0] = k; a[1] = x; a[2] = z; a[3] = rnd() * TAU; a[4] = hx; a[5] = hz; a[6] = x; a[7] = z; a[8] = 0; a[9] = rr(1, 8);
@@ -328,6 +329,7 @@ function lifeTick(dt, cx, cy, cz) {
       if (k === KIND.BEARER && nl < 6) { const c = cos(yaw), s = sin(yaw); DL[nl * 4] = x + c * 0.32 + s * 0.35; DL[nl * 4 + 1] = y + 1.0; DL[nl * 4 + 2] = z + s * 0.32 - c * 0.35; DL[nl * 4 + 3] = 1; nl++; }
       continue;
     }
+    if (k === KIND.BOAT && LA[b + 15]) { const o = i * 8; LI[o] = LA[b + 1]; LI[o + 1] = LA[b + 4]; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3]; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.BOAT) { const o = i * 8, t = F[TIME] + i * 3; LI[o] = LA[b + 1]; LI[o + 1] = sin(t * 1.3) * 0.05 - 0.05; LI[o + 2] = LA[b + 2]; LI[o + 3] = LA[b + 3] + sin(t * 0.21) * 0.15; LI[o + 4] = LA[b + 14]; LI[o + 5] = 0; LI[o + 6] = 0; LI[o + 7] = 0; continue; }
     if (k === KIND.EAGLE) { eagleAt(F[TIME]); const o = i * 8; LI[o] = EG[0]; LI[o + 1] = EG[1]; LI[o + 2] = EG[2]; LI[o + 3] = atan2(EG[5], EG[3]); LI[o + 4] = LA[b + 14]; LI[o + 5] = F[TIME] * 0.55 % 1; LI[o + 6] = 1; LI[o + 7] = 0.15 + 0.55 * sstep(0.75, 0.95, sin(F[TIME] * 0.23 + 3.3)); continue; }
     const heron = k === KIND.HERON, swim = k === KIND.SWAN || k === KIND.DUCK, small = k === KIND.RABBIT || k === KIND.SQUIRREL;

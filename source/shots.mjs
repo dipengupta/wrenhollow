@@ -23,7 +23,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const flags = ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures', '--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--allow-file-access-from-files'];
 const viewport = { width: 1728, height: 1117, deviceScaleFactor: 2 };
 let browser;
-if ((mode === 'bench' || mode === 'bgeval') && !show) {
+if ((mode === 'bench' || mode === 'bgeval' || mode === 'prof') && !show) {
   const port = 9300 + (process.pid % 500), dir = mkdtempSync(path.join(os.tmpdir(), 'wrenhollow-bench-'));
   execFileSync('open', ['-g', '-n', '-a', 'Google Chrome', '--args', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--window-position=-4000,0', '--window-size=1760,1200', ...flags]);
   for (let i = 0; i < 100 && !browser; i++) { try { browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: viewport }); } catch { await new Promise((r) => setTimeout(r, 200)); } }

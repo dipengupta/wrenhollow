@@ -79,13 +79,16 @@ the arches of the Long Viaduct.
   rowing boats
 - **The land**: a covered timber bridge over a rocky gorge with a waterfall (and a rainbow in its spray on sunny
   days), a multi-arch viaduct, a village with smoking chimneys and a church, a water mill with a turning wheel, an
-  Iron Age broch and a ruined croft, a chambered cairn and an ancient Scots pine beside a stone circle, about 90,000
+  Iron Age broch and a ruined croft, a chambered cairn and an ancient Scots pine beside a stone circle, two hill
+  farms with hay and peat stacks, turf-roofed shielings, a beacon that burns after dark, a crannog on piles in the loch
+  and a sandy cove with a fisher's bothy, a walled garden with an orchard that blossoms and fruits with the seasons, a
+  kirkyard of leaning headstones, about 90,000
   pines and birches, heather, bracken, rock faces, snow-capped mountains
 - **The sky**: a physically based sky for every time of day, drifting clouds, sun shafts, valley mist, and at
   night stars, shooting stars, a band of the galaxy and the moon with its path on the loch; the northern lights on
   clear winter nights
 - **Places**: as you arrive at one, its name appears on screen, and the map keeps count of the places you have
-  found. The map names twenty-two of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
+  found. The map names thirty of them, from the Great Hall and Starwatch to Corrie Gorge, the village of
   Kilwren, the island of Inchkeld, Dun Corran and the Grey Stones. `?place=starwatch` in the address starts the flight there.
 - **Life**: a ferryman rowing between the boathouse and Inchkeld, a heron in the shallows, herds of red deer that bolt
   when you fly too close, highland cattle, sheep on the village pastures, rabbits and red squirrels, swans and ducks on

@@ -55,6 +55,21 @@
     time: (i) => applyTime(i),
     calm: () => { lifeCalm = true; },
     titles: (on) => { titlesOff = !on; },
+    // open ground for building: within the box, every step metres, places with no tree within r, clear of buildings,
+    // not steep, and between heights h0 and h1; returns [x, z, height, slope] for the flattest few
+    scan: (x0, x1, z0, z1, step, r, h0, h1, n = 8) => {
+      const out = [];
+      for (let x = x0; x <= x1; x += step) for (let z = z0; z <= z1; z += step) {
+        const h = H(x, z), sl = slope(x, z); if (h < h0 || h > h1 || sl > 0.3) continue;
+        if (OBJS.some((o) => x > o[2] - r && x < o[5] + r && z > o[4] - r && z < o[7] + r)) continue;
+        let near = false; for (let i = 0; i < TW.n && !near; i++) { const dx = TW.data[i * 8] - x, dz = TW.data[i * 8 + 2] - z; near = dx * dx + dz * dz < r * r; }
+        if (!near) out.push([x, z, +h.toFixed(1), +sl.toFixed(2)]);
+      }
+      return JSON.stringify(out.sort((a, b) => a[3] - b[3]).slice(0, n));
+    },
+    // the loch floor: points between depths d0 and d1 (negative heights) in the box
+    shallows: (x0, x1, z0, z1, step, d0, d1) => { const out = []; for (let x = x0; x <= x1; x += step) for (let z = z0; z <= z1; z += step) { const h = H(x, z); if (h < d0 && h > d1) out.push([x, z, +h.toFixed(1)]); } return JSON.stringify(out.slice(0, 40)); },
+    objsNear: (x, z, r) => JSON.stringify(OBJS.filter((o) => x > o[2] - r && x < o[5] + r && z > o[4] - r && z < o[7] + r).map((o) => o.slice(2, 8).map((v) => v | 0))),
     // flowing time from t seconds into the day (0 dawn, 120 morning, ... 600 night), at the given speed
     flow: (t, speed = 1) => { if (!flowing) applyTime(FLOWI); DAYS = speed; DAY0 = t - F[TIME] * speed; blendTime(F[TIME]); setLight(); bakeSky(); bakeShadow(); },
     cur: () => JSON.stringify({ ...CUR, sun: SUN.map((v) => +v.toFixed(3)), shI, slotK }),
